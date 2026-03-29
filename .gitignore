@@ -1,0 +1,24 @@
+# Python cache and virtual environment
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+
+# OS/editor
+.DS_Store
+.vscode/
+
+# Logs
+logs/
+*.log
+
+# Large datasets and generated artifacts
+datasets/
+data/raw/
+data/interim/
+data/processed/
+
+# Optional local experiment helpers
+diagnostic_ablation.py
+quick_ridge_test.py
+run_final_eval.py

@@ -1,0 +1,79 @@
+companies:
+  - MSFT
+  - AAPL
+  - TSLA
+  - NVDA
+  - AMZN
+  - DIS
+  - INTC
+  - GOOG
+  - GILD
+  - WFC
+  - AMD
+  - BA
+  - BABA
+  - CVX
+  - WMT
+  - XOM
+  - MU
+  - PCG
+  - GS
+  - FSMB
+
+price_data:
+  start_date: "2020-01-01"
+  end_date: null
+  interval: "1d"
+  lookback_buffer_days: 60
+
+news_data:
+  real_companies_news_csv: "datasets/data/real_companies_news.csv"
+  top20_windows_csv: "data/reference/research/top20_companies_best_1yr_window.csv"
+  prepared_filtered_news_csv: "data/raw/news/research_top20_filtered_news.csv"
+  refresh_prepared_filtered_news: false
+  chunksize: 200000
+
+sentiment_model:
+  model_name: "ProsusAI/finbert"
+  batch_size: 64
+  max_length: 256
+  device: "auto"
+  reuse_existing_if_present: true
+
+alignment:
+  window_size: 20
+  target_column: "Close"
+
+model_input:
+  target_col: "target_close"
+  normalize_price_per_company: true
+
+model_training:
+  cv_folds: 3
+  cv_strategy: "timeseries"
+  base_epochs: 8
+  scoring: "neg_root_mean_squared_error"
+  device: "auto"
+  param_grid:
+    price_hidden_dim: [32, 64]
+    sentiment_hidden_dim: [16, 32]
+    price_num_layers: [1, 2]
+    sentiment_num_layers: [1]
+    lstm_dropout: [0.0]
+    company_emb_dim: [8]
+    ann_hidden_dim: [64, 128]
+    dropout: [0.1, 0.2]
+    optimizer_name: ["adam", "adamw"]
+    learning_rate: [0.001]
+    batch_size: [64]
+
+paths:
+  raw_prices: "data/raw/prices/prices_daily.csv"
+  raw_news: "data/raw/news/research_top20_filtered_news.csv"
+  news_price_aligned_output: "data/processed/aligned/news_price_daily_aligned.csv"
+  interim_sentiment: "data/interim/sentiment/news_sentiment_daily.csv"
+  aligned_output: "data/processed/aligned/hybrid_training_dataset.csv"
+  model_input_npz: "data/processed/model_input/hybrid_late_fusion_input.npz"
+  company_map: "data/processed/aligned/company_id_map.csv"
+  trained_model_dir: "data/processed/model_artifacts"
+  log_dir: "logs"

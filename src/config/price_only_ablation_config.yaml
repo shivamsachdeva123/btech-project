@@ -1,0 +1,26 @@
+paths:
+  aligned_output: "data/processed/aligned/hybrid_training_dataset.csv"
+  model_input_npz: "data/processed/price_only_ablation/model_input/price_only_input.npz"
+  trained_model_dir: "data/processed/price_only_ablation/model_artifacts"
+  metrics_dir: "data/processed/price_only_ablation/metrics"
+
+model_input:
+  target_col: "target_close"
+  normalize_price_per_company: true
+
+model_training:
+  cv_folds: 3
+  cv_strategy: "timeseries"
+  base_epochs: 8
+  scoring: "neg_root_mean_squared_error"
+  device: "auto"
+  param_grid:
+    price_hidden_dim: [32, 64]
+    price_num_layers: [1, 2]
+    lstm_dropout: [0.0]
+    company_emb_dim: [8]
+    ann_hidden_dim: [64, 128]
+    dropout: [0.1, 0.2]
+    optimizer_name: ["adam", "adamw"]
+    learning_rate: [0.001]
+    batch_size: [64]

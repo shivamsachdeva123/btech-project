@@ -1,0 +1,9 @@
+{
+  "include": ["src", "scripts"],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": ["src"]
+    }
+  ]
+}
