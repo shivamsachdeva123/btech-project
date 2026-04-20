@@ -10,16 +10,19 @@ class NewsOnlyLateFusionRegressorNet(nn.Module):
     def __init__(
         self,
         company_vocab_size: int,
-        sentiment_input_dim: int = 5,
+        sentiment_input_dim: int = 6,
         sentiment_hidden_dim: int = 32,
         sentiment_num_layers: int = 1,
         lstm_dropout: float = 0.0,
+        sentiment_dropout: float = 0.5,
         company_emb_dim: int = 16,
         ann_hidden_dim: int = 64,
         dropout: float = 0.2,
     ) -> None:
         super().__init__()
         sentiment_lstm_dropout = lstm_dropout if sentiment_num_layers > 1 else 0.0
+        # Add dropout specifically to sentiment inputs to reduce noise
+        self.sentiment_input_dropout = nn.Dropout(p=sentiment_dropout)
         self.sentiment_lstm = nn.LSTM(
             input_size=sentiment_input_dim,
             hidden_size=sentiment_hidden_dim,
@@ -44,7 +47,9 @@ class NewsOnlyLateFusionRegressorNet(nn.Module):
         self.volatility_head = nn.Linear(head_dim, 1)
 
     def forward(self, sentiment_seq: torch.Tensor, company_id: torch.Tensor) -> torch.Tensor:
-        _, (sent_h_n, _) = self.sentiment_lstm(sentiment_seq)
+        # Apply dropout to sentiment inputs to reduce noise from low-quality signals
+        sentiment_seq_dropped = self.sentiment_input_dropout(sentiment_seq)
+        _, (sent_h_n, _) = self.sentiment_lstm(sentiment_seq_dropped)
 
         sent_repr = sent_h_n[-1]
         company_repr = self.company_embedding(company_id).squeeze(1)

@@ -266,6 +266,12 @@ def run_pipeline(config_path: Path, companies_filter: list[str] | None = None, d
             sentiment_df["sentiment_strength"], errors="coerce"
         ).fillna(0.0)
 
+        if "net_sentiment" not in sentiment_df.columns:
+            sentiment_df["net_sentiment"] = sentiment_df["sent_pos"] - sentiment_df["sent_neg"]
+        sentiment_df["net_sentiment"] = pd.to_numeric(
+            sentiment_df["net_sentiment"], errors="coerce"
+        ).fillna(0.0)
+
         sentiment_df = sentiment_df.dropna(subset=["published_date"])
         logger.info("Reused existing sentiment file from %s. Rows: %s", sentiment_out, len(sentiment_df))
     else:
@@ -304,6 +310,8 @@ def run_pipeline(config_path: Path, companies_filter: list[str] | None = None, d
         window_size=align_cfg["window_size"],
         target_column=align_cfg["target_column"],
         sentiment_temporal_decay_lambda=float(align_cfg.get("sentiment_temporal_decay_lambda", 0.1)),
+        sentiment_strength_threshold=float(align_cfg.get("sentiment_strength_threshold", 0.2)),
+        sentiment_scale_factor=float(align_cfg.get("sentiment_scale_factor", 0.2)),
         logger=logger,
     )
 

@@ -9,12 +9,13 @@ class HybridLateFusionRegressorNet(nn.Module):
         self,
         company_vocab_size: int,
         price_input_dim: int = 1,
-        sentiment_input_dim: int = 5,
+        sentiment_input_dim: int = 6,
         price_hidden_dim: int = 32,
         sentiment_hidden_dim: int = 32,
         price_num_layers: int = 1,
         sentiment_num_layers: int = 1,
         lstm_dropout: float = 0.0,
+        sentiment_dropout: float = 0.5,
         company_emb_dim: int = 16,
         ann_hidden_dim: int = 64,
         dropout: float = 0.2,
@@ -30,6 +31,8 @@ class HybridLateFusionRegressorNet(nn.Module):
             num_layers=price_num_layers,
             dropout=price_lstm_dropout,
         )
+        # Add dropout specifically to sentiment inputs to reduce noise
+        self.sentiment_input_dropout = nn.Dropout(p=sentiment_dropout)
         self.sentiment_lstm = nn.LSTM(
             input_size=sentiment_input_dim,
             hidden_size=sentiment_hidden_dim,
@@ -62,7 +65,9 @@ class HybridLateFusionRegressorNet(nn.Module):
         company_id: torch.Tensor,
     ) -> torch.Tensor:
         _, (price_h_n, _) = self.price_lstm(price_seq)
-        _, (sent_h_n, _) = self.sentiment_lstm(sentiment_seq)
+        # Apply dropout to sentiment inputs to reduce noise from low-quality signals
+        sentiment_seq_dropped = self.sentiment_input_dropout(sentiment_seq)
+        _, (sent_h_n, _) = self.sentiment_lstm(sentiment_seq_dropped)
 
         price_repr = price_h_n[-1]
         sent_repr = sent_h_n[-1]

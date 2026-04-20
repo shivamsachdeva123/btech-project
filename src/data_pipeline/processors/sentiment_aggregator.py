@@ -179,6 +179,7 @@ def build_daily_sentiment(
                 "sent_neu",
                 "sent_neg",
                 "sentiment_strength",
+                "net_sentiment",
                 "news_count",
             ]
         )
@@ -195,6 +196,7 @@ def build_daily_sentiment(
                 "sent_neu",
                 "sent_neg",
                 "sentiment_strength",
+                "net_sentiment",
                 "news_count",
             ]
         )
@@ -286,6 +288,7 @@ def build_daily_sentiment(
     )
 
     aggregated["sentiment_strength"] = (aggregated["sent_pos"] - aggregated["sent_neg"]).abs()
+    aggregated["net_sentiment"] = aggregated["sent_pos"] - aggregated["sent_neg"]
 
     aggregated = aggregated[
         [
@@ -295,6 +298,7 @@ def build_daily_sentiment(
             "sent_neu",
             "sent_neg",
             "sentiment_strength",
+            "net_sentiment",
             "news_count",
         ]
     ]

@@ -26,13 +26,14 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
         self,
         window_size: int,
         company_vocab_size: int,
-        sentiment_feature_dim: int = 5,
+        sentiment_feature_dim: int = 6,
         price_feature_dim: int = 1,
         price_hidden_dim: int = 32,
         sentiment_hidden_dim: int = 32,
         price_num_layers: int = 1,
         sentiment_num_layers: int = 1,
         lstm_dropout: float = 0.0,
+        sentiment_dropout: float = 0.5,
         company_emb_dim: int = 16,
         ann_hidden_dim: int = 64,
         dropout: float = 0.2,
@@ -55,6 +56,7 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
         self.price_num_layers = price_num_layers
         self.sentiment_num_layers = sentiment_num_layers
         self.lstm_dropout = lstm_dropout
+        self.sentiment_dropout = sentiment_dropout
         self.company_emb_dim = company_emb_dim
         self.ann_hidden_dim = ann_hidden_dim
         self.dropout = dropout
@@ -131,6 +133,7 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
             price_num_layers=self.price_num_layers,
             sentiment_num_layers=self.sentiment_num_layers,
             lstm_dropout=self.lstm_dropout,
+            sentiment_dropout=self.sentiment_dropout,
             company_emb_dim=self.company_emb_dim,
             ann_hidden_dim=self.ann_hidden_dim,
             dropout=self.dropout,

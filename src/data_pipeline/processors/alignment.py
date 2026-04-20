@@ -12,6 +12,7 @@ DEFAULT_SENTIMENT = {
     "sent_neu": 0.0,
     "sent_neg": 0.0,
     "sentiment_strength": 0.0,
+    "net_sentiment": 0.0,
     "news_count": 0,
 }
 
@@ -33,6 +34,8 @@ def align_modalities(
     target_column: str,
     logger: logging.Logger,
     sentiment_temporal_decay_lambda: float = 0.1,
+    sentiment_strength_threshold: float = 0.2,
+    sentiment_scale_factor: float = 0.2,
 ) -> pd.DataFrame:
     if prices_df.empty:
         logger.warning("Prices dataframe is empty. No aligned rows can be built.")
@@ -50,6 +53,7 @@ def align_modalities(
                 "sent_neu",
                 "sent_neg",
                 "sentiment_strength",
+                "net_sentiment",
                 "news_count",
             ]
         )
@@ -76,12 +80,17 @@ def align_modalities(
             safe_close_window_np = np.maximum(close_window_np, 1e-8)
             return_window = np.log(safe_close_window_np[1:] / safe_close_window_np[:-1]).round(6).tolist()
 
-            # Build sentiment windows with 5 features: sent_pos, sent_neu, sent_neg, sentiment_strength, news_count.
+            # Build sentiment windows with 6 features: sent_pos, sent_neu, sent_neg, sentiment_strength, net_sentiment, news_count.
             sentiment_window_np = window_slice[
-                ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength", "news_count"]
+                ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength", "net_sentiment", "news_count"]
             ].to_numpy(dtype=float)
             # Align sentiment with returns: return_t corresponds to sentiment_t.
             sentiment_window_np = sentiment_window_np[1:]
+
+            # Apply hard gating: mask out low-signal days where sentiment_strength < threshold.
+            # sentiment_strength is at index 3.
+            use_news = (sentiment_window_np[:, 3] >= sentiment_strength_threshold).astype(float).reshape(-1, 1)
+            sentiment_window_np = sentiment_window_np * use_news
 
             # Apply temporal decay so older timesteps have lower influence.
             # The most recent timestep has days_ago=0 and decay=1.0.
@@ -89,6 +98,9 @@ def align_modalities(
                 days_ago = np.arange(len(sentiment_window_np) - 1, -1, -1, dtype=np.float32)
                 decay = np.exp(-float(sentiment_temporal_decay_lambda) * days_ago).reshape(-1, 1)
                 sentiment_window_np = sentiment_window_np * decay
+
+            # Scale down sentiment features to reduce noise.
+            sentiment_window_np = sentiment_window_np * float(sentiment_scale_factor)
 
             sentiment_window = sentiment_window_np.round(6).tolist()
 
