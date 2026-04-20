@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import ast
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,20 +22,30 @@ class PriceOnlyInputArrays:
 def _parse_json_list(value: str) -> list:
     if isinstance(value, list):
         return value
+    if isinstance(value, np.ndarray):
+        return value.tolist()
     if not isinstance(value, str):
         raise ValueError(f"Expected JSON string or list, got type={type(value)}")
-    return json.loads(value)
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError:
+        return ast.literal_eval(value)
 
 
 def build_flattened_price_only_input(
     aligned_df: pd.DataFrame,
-    price_col: str = "close_window",
+    price_col: str = "return_window",
     company_col: str = "company_id",
     target_col: str = "target_log_return",
     normalize_price_per_company: bool = True,
 ) -> PriceOnlyInputArrays:
     if aligned_df.empty:
         raise ValueError("Aligned dataframe is empty")
+    _ = normalize_price_per_company
+
+    if price_col not in aligned_df.columns:
+        # Backward compatibility for older aligned datasets.
+        price_col = "close_window"
 
     price_windows = [_parse_json_list(v) for v in aligned_df[price_col].tolist()]
 
@@ -43,39 +54,16 @@ def build_flattened_price_only_input(
         if len(window) != window_size:
             raise ValueError(f"Inconsistent price window length at row {i}: {len(window)} != {window_size}")
 
+    # Preserve raw windowed values. Fold-aware normalization is handled inside estimator.fit.
     raw_price_arr = np.asarray(price_windows, dtype=np.float32).reshape(-1, window_size)
-    tickers = aligned_df["ticker"].astype(str).tolist()
-
-    if normalize_price_per_company:
-        ticker_stats: dict[str, tuple[float, float]] = {}
-        for ticker in sorted(set(tickers)):
-            ticker_windows = raw_price_arr[np.array(tickers) == ticker]
-            ticker_values = ticker_windows.reshape(-1)
-            mean = float(np.mean(ticker_values))
-            std = float(np.std(ticker_values))
-            ticker_stats[ticker] = (mean, std if std > 1e-8 else 1.0)
-
-        normalized = np.empty_like(raw_price_arr)
-        for i, ticker in enumerate(tickers):
-            mean, std = ticker_stats[ticker]
-            normalized[i] = (raw_price_arr[i] - mean) / std
-        price_arr = normalized.reshape(-1, window_size, 1)
-
-        target_raw = aligned_df[target_col].astype(float).to_numpy(dtype=np.float32)
-        target_arr = np.empty_like(target_raw)
-        for i, ticker in enumerate(tickers):
-            mean, std = ticker_stats[ticker]
-            target_arr[i] = (target_raw[i] - mean) / std
-
-        target_close_raw = aligned_df["target_close"].astype(float).to_numpy(dtype=np.float32)
-        target_close_arr = np.empty_like(target_close_raw)
-        for i, ticker in enumerate(tickers):
-            mean, std = ticker_stats[ticker]
-            target_close_arr[i] = (target_close_raw[i] - mean) / std
-    else:
-        price_arr = raw_price_arr.reshape(-1, window_size, 1)
-        target_arr = aligned_df[target_col].astype(float).to_numpy(dtype=np.float32)
-        target_close_arr = aligned_df["target_close"].astype(float).to_numpy(dtype=np.float32)
+    price_arr = raw_price_arr.reshape(-1, window_size, 1)
+    target_return_arr = aligned_df[target_col].astype(float).to_numpy(dtype=np.float32)
+    if "direction" not in aligned_df.columns or "volatility" not in aligned_df.columns:
+        raise ValueError("Aligned dataframe must include explicit 'direction' and 'volatility' columns.")
+    target_direction_arr = aligned_df["direction"].astype(float).to_numpy(dtype=np.float32)
+    target_volatility_arr = aligned_df["volatility"].astype(float).to_numpy(dtype=np.float32)
+    target_arr = np.column_stack([target_return_arr, target_volatility_arr, target_direction_arr]).astype(np.float32)
+    target_close_arr = aligned_df["target_close"].astype(float).to_numpy(dtype=np.float32)
 
     company_arr = aligned_df[company_col].astype(int).to_numpy(dtype=np.int64).reshape(-1, 1)
     previous_close_arr = aligned_df["previous_close"].astype(float).to_numpy(dtype=np.float32)

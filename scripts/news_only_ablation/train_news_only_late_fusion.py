@@ -10,13 +10,13 @@ import yaml
 from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from hybrid_model.sklearn_estimator import HybridLateFusionEstimator
 from hybrid_data_prep.build_model_input import convert_log_returns_to_prices
+from news_only_ablation.sklearn_estimator import NewsOnlyLateFusionEstimator
 
 
 def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -26,7 +26,7 @@ def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, n
     return y_arr[:, 0], y_arr[:, 1], y_arr[:, 2]
 
 
-def _neg_return_rmse(estimator: HybridLateFusionEstimator, X: np.ndarray, y: np.ndarray) -> float:
+def _neg_return_rmse(estimator: NewsOnlyLateFusionEstimator, X: np.ndarray, y: np.ndarray) -> float:
     y = np.asarray(y)
     y_return = y[:, 0] if y.ndim == 2 else y
     pred = estimator.predict(X)
@@ -42,8 +42,6 @@ def run(config_path: Path) -> None:
     model_input_path = PROJECT_ROOT / config["paths"]["model_input_npz"]
     artifact_dir = PROJECT_ROOT / config["paths"]["trained_model_dir"]
     train_cfg = config.get("model_training", {})
-    model_input_cfg = config.get("model_input", {})
-    target_col = str(model_input_cfg.get("target_col", "target_log_return"))
     artifact_dir.mkdir(parents=True, exist_ok=True)
 
     payload = np.load(model_input_path)
@@ -52,34 +50,34 @@ def run(config_path: Path) -> None:
     previous_close = payload["previous_close"]
     target_close = payload["target_close"]
     window_size = int(payload["window_size"])
-    price_feature_dim = int(payload["price_feature_dim"])
     sentiment_feature_dim = int(payload["sentiment_feature_dim"])
+    target_col = str(config.get("model_input", {}).get("target_col", "target_close"))
 
     company_vocab_size = int(np.max(X[:, -1])) + 1
 
-    estimator = HybridLateFusionEstimator(
+    estimator = NewsOnlyLateFusionEstimator(
         window_size=window_size,
         company_vocab_size=company_vocab_size,
-        price_feature_dim=price_feature_dim,
         sentiment_feature_dim=sentiment_feature_dim,
         epochs=int(train_cfg.get("base_epochs", 8)),
         device=str(train_cfg.get("device", "auto")),
         batch_size=64,
     )
 
-    param_grid = train_cfg.get("param_grid", {
-        "price_hidden_dim": [32, 64],
-        "sentiment_hidden_dim": [16, 32],
-        "price_num_layers": [1, 2],
-        "sentiment_num_layers": [1],
-        "lstm_dropout": [0.0],
-        "company_emb_dim": [8],
-        "ann_hidden_dim": [64, 128],
-        "dropout": [0.1, 0.2],
-        "optimizer_name": ["adam", "adamw"],
-        "learning_rate": [1e-3],
-        "batch_size": [64],
-    })
+    param_grid = train_cfg.get(
+        "param_grid",
+        {
+            "sentiment_hidden_dim": [16, 32],
+            "sentiment_num_layers": [1],
+            "lstm_dropout": [0.0],
+            "company_emb_dim": [8],
+            "ann_hidden_dim": [64, 128],
+            "dropout": [0.1, 0.2],
+            "optimizer_name": ["adam", "adamw"],
+            "learning_rate": [1e-3],
+            "batch_size": [64],
+        },
+    )
 
     cv_folds = int(train_cfg.get("cv_folds", 3))
     cv_strategy = str(train_cfg.get("cv_strategy", "kfold")).strip().lower()
@@ -103,8 +101,8 @@ def run(config_path: Path) -> None:
 
     grid.fit(X, y)
 
-    best_model_path = artifact_dir / "hybrid_late_fusion_best.pt"
-    best_params_path = artifact_dir / "hybrid_late_fusion_best_params.json"
+    best_model_path = artifact_dir / "news_only_late_fusion_best.pt"
+    best_params_path = artifact_dir / "news_only_late_fusion_best_params.json"
 
     best_estimator = grid.best_estimator_
     best_estimator.save_model(best_model_path)
@@ -136,7 +134,6 @@ def run(config_path: Path) -> None:
                 "best_score": float(grid.best_score_),
                 "best_params": grid.best_params_,
                 "window_size": window_size,
-                "price_feature_dim": price_feature_dim,
                 "sentiment_feature_dim": sentiment_feature_dim,
                 "company_vocab_size": company_vocab_size,
                 "target_col": target_col,
@@ -163,12 +160,12 @@ def run(config_path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Train late-fusion two-LSTM hybrid model with GridSearchCV")
+    parser = argparse.ArgumentParser(description="Train news-only late-fusion model with GridSearchCV")
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("src/config/pipeline_config.yaml"),
-        help="Path to pipeline YAML config",
+        default=Path("src/config/news_only_ablation_config.yaml"),
+        help="Path to news-only ablation YAML config",
     )
     return parser.parse_args()
 

@@ -30,23 +30,26 @@ news_data:
   real_companies_news_csv: "datasets/data/real_companies_news.csv"
   top20_windows_csv: "data/reference/research/top20_companies_best_1yr_window.csv"
   prepared_filtered_news_csv: "data/raw/news/research_top20_filtered_news.csv"
-  refresh_prepared_filtered_news: false
+  refresh_prepared_filtered_news: true
   chunksize: 200000
 
 sentiment_model:
   model_name: "ProsusAI/finbert"
-  batch_size: 64
+  batch_size: 128
   max_length: 256
-  device: "auto"
-  reuse_existing_if_present: true
+  device: "mps"
+  reuse_existing_if_present: false
+  top_k: 5
 
 alignment:
   window_size: 20
   target_column: "Close"
+  sentiment_temporal_decay_lambda: 0.1
 
 model_input:
-  target_col: "target_close"
-  normalize_price_per_company: true
+  target_col: "target_log_return"
+  normalize_price_per_company: false
+  sentiment_feature_dim: 5  # sent_pos, sent_neu, sent_neg, sentiment_strength, news_count
 
 model_training:
   cv_folds: 3
@@ -72,6 +75,7 @@ paths:
   raw_news: "data/raw/news/research_top20_filtered_news.csv"
   news_price_aligned_output: "data/processed/aligned/news_price_daily_aligned.csv"
   interim_sentiment: "data/interim/sentiment/news_sentiment_daily.csv"
+  interim_sentiment_article_level: "data/interim/sentiment/news_sentiment_article_level.csv"
   aligned_output: "data/processed/aligned/hybrid_training_dataset.csv"
   model_input_npz: "data/processed/model_input/hybrid_late_fusion_input.npz"
   company_map: "data/processed/aligned/company_id_map.csv"

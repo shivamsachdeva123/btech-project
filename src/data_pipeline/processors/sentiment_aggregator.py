@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import logging
 from bisect import bisect_right
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import torch
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -164,6 +166,8 @@ def build_daily_sentiment(
     batch_size: int = 16,
     max_length: int = 256,
     device_preference: str = "auto",
+    top_k: int = 5,
+    article_level_output_path: Path | str | None = None,
 ) -> pd.DataFrame:
     if news_df.empty:
         logger.warning("Input news dataframe is empty. Sentiment output will be empty.")
@@ -174,6 +178,7 @@ def build_daily_sentiment(
                 "sent_pos",
                 "sent_neu",
                 "sent_neg",
+                "sentiment_strength",
                 "news_count",
             ]
         )
@@ -189,6 +194,7 @@ def build_daily_sentiment(
                 "sent_pos",
                 "sent_neu",
                 "sent_neg",
+                "sentiment_strength",
                 "news_count",
             ]
         )
@@ -209,23 +215,113 @@ def build_daily_sentiment(
 
     prob_df = pd.DataFrame(article_probs, columns=["sent_pos", "sent_neu", "sent_neg"])
     scored_df = pd.concat(
-        [bucketed_news_df[["ticker", "published_date"]].reset_index(drop=True), prob_df],
+        [bucketed_news_df[["ticker", "published_date", "news_text"]].reset_index(drop=True), prob_df],
         axis=1,
     )
-    aggregated = (
-        scored_df.groupby(["ticker", "published_date"], as_index=False)
-        .agg(
-            sent_pos=("sent_pos", "mean"),
-            sent_neu=("sent_neu", "mean"),
-            sent_neg=("sent_neg", "mean"),
-            news_count=("sent_pos", "size"),
+
+    # Article-level relevance score used for top-k filtering and weighted aggregation.
+    scored_df["relevance_score"] = (scored_df["sent_pos"] - scored_df["sent_neg"]).abs()
+    scored_df["article_idx"] = np.arange(len(scored_df), dtype=np.int64)
+
+    top_k = max(int(top_k), 1)
+    scored_df = scored_df.sort_values(
+        ["ticker", "published_date", "relevance_score"],
+        ascending=[True, True, False],
+    )
+    topk_df = scored_df.groupby(["ticker", "published_date"], as_index=False).head(top_k).copy()
+
+    if article_level_output_path is not None:
+        article_level_path = Path(article_level_output_path)
+        article_level_path.parent.mkdir(parents=True, exist_ok=True)
+
+        topk_idx = set(topk_df["article_idx"].astype(int).tolist())
+        article_level_df = scored_df.copy()
+        article_level_df["is_top_k"] = article_level_df["article_idx"].astype(int).isin(topk_idx).astype(int)
+        article_level_df = article_level_df[
+            [
+                "ticker",
+                "published_date",
+                "news_text",
+                "sent_pos",
+                "sent_neu",
+                "sent_neg",
+                "relevance_score",
+                "is_top_k",
+            ]
+        ]
+        article_level_df.to_csv(article_level_path, index=False)
+        logger.info("Saved per-article sentiment vectors to %s. Rows: %s", article_level_path, len(article_level_df))
+
+    grouped = topk_df.groupby(["ticker", "published_date"], sort=False)
+    aggregated = grouped.apply(
+        lambda g: pd.Series(
+            {
+                "weight_sum": float(g["relevance_score"].sum()),
+                "sent_pos_mean": float(g["sent_pos"].mean()),
+                "sent_neu_mean": float(g["sent_neu"].mean()),
+                "sent_neg_mean": float(g["sent_neg"].mean()),
+                "sent_pos_weighted": float((g["relevance_score"] * g["sent_pos"]).sum()),
+                "sent_neu_weighted": float((g["relevance_score"] * g["sent_neu"]).sum()),
+                "sent_neg_weighted": float((g["relevance_score"] * g["sent_neg"]).sum()),
+                "news_count": int(len(g)),
+            }
         )
-        .sort_values(["ticker", "published_date"])
-        .reset_index(drop=True)
+    ).reset_index()
+
+    use_weighted = aggregated["weight_sum"] > 1e-12
+    aggregated["sent_pos"] = np.where(
+        use_weighted,
+        aggregated["sent_pos_weighted"] / aggregated["weight_sum"],
+        aggregated["sent_pos_mean"],
+    )
+    aggregated["sent_neu"] = np.where(
+        use_weighted,
+        aggregated["sent_neu_weighted"] / aggregated["weight_sum"],
+        aggregated["sent_neu_mean"],
+    )
+    aggregated["sent_neg"] = np.where(
+        use_weighted,
+        aggregated["sent_neg_weighted"] / aggregated["weight_sum"],
+        aggregated["sent_neg_mean"],
     )
 
+    aggregated["sentiment_strength"] = (aggregated["sent_pos"] - aggregated["sent_neg"]).abs()
+
+    aggregated = aggregated[
+        [
+            "ticker",
+            "published_date",
+            "sent_pos",
+            "sent_neu",
+            "sent_neg",
+            "sentiment_strength",
+            "news_count",
+        ]
+    ]
+
+    # Ensure a complete per-ticker trading-day table so no-news days are explicit zero-signal rows.
+    trading_days = prices_df[["Ticker", "Date"]].copy()
+    trading_days["ticker"] = trading_days["Ticker"].astype(str).str.upper().str.strip()
+    trading_days["published_date"] = pd.to_datetime(trading_days["Date"], errors="coerce").dt.date
+    trading_days = trading_days[["ticker", "published_date"]].dropna().drop_duplicates()
+
+    aggregated = trading_days.merge(
+        aggregated,
+        how="left",
+        on=["ticker", "published_date"],
+    )
+
+    fill_zero_cols = ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength"]
+    for col in fill_zero_cols:
+        aggregated[col] = pd.to_numeric(aggregated[col], errors="coerce").fillna(0.0)
+
+    aggregated["news_count"] = pd.to_numeric(aggregated["news_count"], errors="coerce").fillna(0).astype(int)
+
+    aggregated = aggregated.sort_values(["ticker", "published_date"]).reset_index(drop=True)
+
     logger.info(
-        "Built FinBERT daily sentiment table from per-article inference. Rows: %s",
+        "Built FinBERT daily sentiment table with top-k=%s weighted aggregation. Rows: %s",
+        top_k,
         len(aggregated),
     )
     return aggregated

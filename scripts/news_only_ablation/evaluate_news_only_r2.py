@@ -10,12 +10,12 @@ import yaml
 from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score
 from sklearn.model_selection import KFold, TimeSeriesSplit
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
-from hybrid_model.sklearn_estimator import HybridLateFusionEstimator
+from news_only_ablation.sklearn_estimator import NewsOnlyLateFusionEstimator
 
 
 def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -31,26 +31,24 @@ def run(config_path: Path) -> None:
 
     model_input_path = PROJECT_ROOT / config["paths"]["model_input_npz"]
     artifact_dir = PROJECT_ROOT / config["paths"]["trained_model_dir"]
+    metrics_dir = PROJECT_ROOT / config["paths"].get("metrics_dir", "data/processed/news_only_ablation/metrics")
+    metrics_dir.mkdir(parents=True, exist_ok=True)
 
     payload = np.load(model_input_path)
     X = payload["X"]
     y = payload["y"]
     window_size = int(payload["window_size"])
-    price_feature_dim = int(payload["price_feature_dim"])
     sentiment_feature_dim = int(payload["sentiment_feature_dim"])
     company_vocab_size = int(np.max(X[:, -1])) + 1
 
-    best = json.loads((artifact_dir / "hybrid_late_fusion_best_params.json").read_text())
+    best = json.loads((artifact_dir / "news_only_late_fusion_best_params.json").read_text())
     params = best["best_params"]
 
-    est = HybridLateFusionEstimator(
+    est = NewsOnlyLateFusionEstimator(
         window_size=window_size,
         company_vocab_size=company_vocab_size,
-        price_feature_dim=price_feature_dim,
         sentiment_feature_dim=sentiment_feature_dim,
-        price_hidden_dim=int(params["price_hidden_dim"]),
         sentiment_hidden_dim=int(params["sentiment_hidden_dim"]),
-        price_num_layers=int(params.get("price_num_layers", 1)),
         sentiment_num_layers=int(params.get("sentiment_num_layers", 1)),
         lstm_dropout=float(params.get("lstm_dropout", 0.0)),
         company_emb_dim=int(params["company_emb_dim"]),
@@ -119,10 +117,10 @@ def run(config_path: Path) -> None:
         "cv_folds": cv_folds,
     }
 
-    out_path = artifact_dir / "hybrid_r2_scores.json"
+    out_path = metrics_dir / "news_only_r2_scores.json"
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
-    print("Hybrid multitask metrics")
+    print("News-only multitask metrics")
     print("return_r2_folds=" + ",".join(f"{s:.6f}" for s in return_r2_folds))
     print("return_r2_mean=" + str(float(np.mean(return_r2_folds))))
     print("return_rmse_folds=" + ",".join(f"{s:.6f}" for s in return_rmse_folds))
@@ -138,12 +136,12 @@ def run(config_path: Path) -> None:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Evaluate R2 for hybrid model")
+    parser = argparse.ArgumentParser(description="Evaluate 3-fold metrics for news-only ablation model")
     parser.add_argument(
         "--config",
         type=Path,
-        default=Path("src/config/pipeline_config.yaml"),
-        help="Path to pipeline YAML config",
+        default=Path("src/config/news_only_ablation_config.yaml"),
+        help="Path to news-only ablation YAML config",
     )
     return parser.parse_args()
 

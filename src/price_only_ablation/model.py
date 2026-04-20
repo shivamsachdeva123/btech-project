@@ -10,7 +10,7 @@ class PriceOnlyLateFusionRegressorNet(nn.Module):
     Keeps the same design philosophy as hybrid model:
     - Price LSTM branch
     - Company embedding branch
-    - ANN head
+    - Shared ANN backbone + task-specific heads
     """
 
     def __init__(
@@ -43,8 +43,11 @@ class PriceOnlyLateFusionRegressorNet(nn.Module):
             nn.Linear(ann_hidden_dim, ann_hidden_dim // 2),
             nn.ReLU(),
             nn.Dropout(dropout),
-            nn.Linear(ann_hidden_dim // 2, 1),
         )
+        head_dim = ann_hidden_dim // 2
+        self.return_head = nn.Linear(head_dim, 1)
+        self.direction_head = nn.Linear(head_dim, 1)
+        self.volatility_head = nn.Linear(head_dim, 1)
 
     def forward(self, price_seq: torch.Tensor, company_id: torch.Tensor) -> torch.Tensor:
         _, (price_h_n, _) = self.price_lstm(price_seq)
@@ -53,4 +56,13 @@ class PriceOnlyLateFusionRegressorNet(nn.Module):
         company_repr = self.company_embedding(company_id).squeeze(1)
 
         fused = torch.cat([price_repr, company_repr], dim=1)
-        return self.ann_head(fused).squeeze(1)
+        shared = self.ann_head(fused)
+        # Output order: [return_pred, volatility_raw, direction_logit]
+        return torch.cat(
+            [
+                self.return_head(shared),
+                self.volatility_head(shared),
+                self.direction_head(shared),
+            ],
+            dim=1,
+        )

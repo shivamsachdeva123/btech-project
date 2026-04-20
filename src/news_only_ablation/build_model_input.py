@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import ast
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,13 +10,12 @@ import pandas as pd
 
 
 @dataclass(frozen=True)
-class HybridInputArrays:
+class NewsOnlyInputArrays:
     X: np.ndarray
     y: np.ndarray
     previous_close: np.ndarray
     target_close: np.ndarray
     window_size: int
-    price_feature_dim: int
     sentiment_feature_dim: int
 
 
@@ -33,31 +32,23 @@ def _parse_json_list(value: str) -> list:
         return ast.literal_eval(value)
 
 
-def build_flattened_hybrid_input(
+def build_flattened_news_only_input(
     aligned_df: pd.DataFrame,
-    price_col: str = "return_window",
     sentiment_col: str = "sentiment_window",
     company_col: str = "company_id",
     target_col: str = "target_log_return",
-    normalize_price_per_company: bool = True,
-) -> HybridInputArrays:
+) -> NewsOnlyInputArrays:
     if aligned_df.empty:
         raise ValueError("Aligned dataframe is empty")
-    _ = normalize_price_per_company
 
-    if price_col not in aligned_df.columns:
-        # Backward compatibility for older aligned datasets.
-        price_col = "close_window"
+    if sentiment_col not in aligned_df.columns:
+        raise ValueError(f"Missing required sentiment column: {sentiment_col}")
 
-    price_windows = [_parse_json_list(v) for v in aligned_df[price_col].tolist()]
     sentiment_windows = [_parse_json_list(v) for v in aligned_df[sentiment_col].tolist()]
 
-    window_size = len(price_windows[0])
-    for i, window in enumerate(price_windows):
-        if len(window) != window_size:
-            raise ValueError(f"Inconsistent price window length at row {i}: {len(window)} != {window_size}")
-
+    window_size = len(sentiment_windows[0])
     sentiment_feature_dim = len(sentiment_windows[0][0])
+
     for i, window in enumerate(sentiment_windows):
         if len(window) != window_size:
             raise ValueError(f"Inconsistent sentiment window length at row {i}: {len(window)} != {window_size}")
@@ -68,59 +59,44 @@ def build_flattened_hybrid_input(
                     f"{len(step_vec)} != {sentiment_feature_dim}"
                 )
 
-    # Preserve raw windowed values. Fold-aware normalization is handled inside estimator.fit
-    # to avoid leakage across time-based splits.
-    raw_price_arr = np.asarray(price_windows, dtype=np.float32).reshape(-1, window_size)
-    price_arr = raw_price_arr.reshape(-1, window_size, 1)
-    if "target_log_return" in aligned_df.columns:
-        target_return_arr = aligned_df["target_log_return"].astype(float).to_numpy(dtype=np.float32)
-    else:
-        target_return_arr = aligned_df[target_col].astype(float).to_numpy(dtype=np.float32)
+    sent_arr = np.asarray(sentiment_windows, dtype=np.float32)
 
+    target_return_arr = aligned_df[target_col].astype(float).to_numpy(dtype=np.float32)
     if "direction" not in aligned_df.columns or "volatility" not in aligned_df.columns:
         raise ValueError("Aligned dataframe must include explicit 'direction' and 'volatility' columns.")
+    target_direction_arr = aligned_df["direction"].astype(float).to_numpy(dtype=np.float32)
+    target_volatility_arr = aligned_df["volatility"].astype(float).to_numpy(dtype=np.float32)
+    target_arr = np.column_stack([target_return_arr, target_volatility_arr, target_direction_arr]).astype(np.float32)
 
-    direction_arr = aligned_df["direction"].astype(float).to_numpy(dtype=np.float32)
-    volatility_arr = aligned_df["volatility"].astype(float).to_numpy(dtype=np.float32)
-
-    # Target order is shared across all variants.
-    target_arr = np.column_stack([target_return_arr, volatility_arr, direction_arr]).astype(np.float32)
-    target_close_arr = aligned_df["target_close"].astype(float).to_numpy(dtype=np.float32)
-
-    sent_arr = np.asarray(sentiment_windows, dtype=np.float32)
     company_arr = aligned_df[company_col].astype(int).to_numpy(dtype=np.int64).reshape(-1, 1)
     previous_close_arr = aligned_df["previous_close"].astype(float).to_numpy(dtype=np.float32)
+    target_close_arr = aligned_df["target_close"].astype(float).to_numpy(dtype=np.float32)
 
-    # Flatten to make GridSearchCV handling straightforward while preserving sequence recoverability.
-    X_price_flat = price_arr.reshape(len(price_arr), -1)
     X_sent_flat = sent_arr.reshape(len(sent_arr), -1)
-    X = np.concatenate([X_price_flat, X_sent_flat, company_arr.astype(np.float32)], axis=1)
+    X = np.concatenate([X_sent_flat, company_arr.astype(np.float32)], axis=1)
 
-    return HybridInputArrays(
+    return NewsOnlyInputArrays(
         X=X,
         y=target_arr,
         previous_close=previous_close_arr,
         target_close=target_close_arr,
         window_size=window_size,
-        price_feature_dim=1,
         sentiment_feature_dim=sentiment_feature_dim,
     )
 
 
-def build_flattened_hybrid_input_from_csv(
+def build_flattened_news_only_input_from_csv(
     aligned_csv_path: Path,
     target_col: str = "target_log_return",
-    normalize_price_per_company: bool = True,
-) -> HybridInputArrays:
+) -> NewsOnlyInputArrays:
     df = pd.read_csv(aligned_csv_path)
-    return build_flattened_hybrid_input(
+    return build_flattened_news_only_input(
         aligned_df=df,
         target_col=target_col,
-        normalize_price_per_company=normalize_price_per_company,
     )
 
 
-def save_hybrid_input_npz(arrays: HybridInputArrays, out_path: Path) -> None:
+def save_news_only_input_npz(arrays: NewsOnlyInputArrays, out_path: Path) -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         out_path,
@@ -129,10 +105,5 @@ def save_hybrid_input_npz(arrays: HybridInputArrays, out_path: Path) -> None:
         previous_close=arrays.previous_close,
         target_close=arrays.target_close,
         window_size=np.int64(arrays.window_size),
-        price_feature_dim=np.int64(arrays.price_feature_dim),
         sentiment_feature_dim=np.int64(arrays.sentiment_feature_dim),
     )
-
-
-def convert_log_returns_to_prices(log_returns: np.ndarray, previous_close: np.ndarray) -> np.ndarray:
-    return previous_close * np.exp(log_returns)

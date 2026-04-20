@@ -1,12 +1,11 @@
 paths:
   aligned_output: "data/processed/aligned/hybrid_training_dataset.csv"
-  model_input_npz: "data/processed/price_only_ablation/model_input/price_only_input.npz"
-  trained_model_dir: "data/processed/price_only_ablation/model_artifacts"
-  metrics_dir: "data/processed/price_only_ablation/metrics"
+  model_input_npz: "data/processed/news_only_ablation/model_input/news_only_input.npz"
+  trained_model_dir: "data/processed/news_only_ablation/model_artifacts"
+  metrics_dir: "data/processed/news_only_ablation/metrics"
 
 model_input:
   target_col: "target_log_return"
-  normalize_price_per_company: false
 
 model_training:
   cv_folds: 3
@@ -15,8 +14,8 @@ model_training:
   scoring: "neg_root_mean_squared_error"
   device: "auto"
   param_grid:
-    price_hidden_dim: [32, 64]
-    price_num_layers: [1, 2]
+    sentiment_hidden_dim: [16, 32]
+    sentiment_num_layers: [1]
     lstm_dropout: [0.0]
     company_emb_dim: [8]
     ann_hidden_dim: [64, 128]

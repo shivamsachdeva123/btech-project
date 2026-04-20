@@ -7,7 +7,8 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from sklearn.model_selection import TimeSeriesSplit, cross_val_score
+from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import KFold, TimeSeriesSplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SRC_PATH = PROJECT_ROOT / "src"
@@ -15,6 +16,13 @@ if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
 from price_only_ablation.sklearn_estimator import PriceOnlyLateFusionEstimator
+
+
+def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    y_arr = np.asarray(y, dtype=np.float32)
+    if y_arr.ndim != 2 or y_arr.shape[1] < 3:
+        raise ValueError("Expected y with shape (n_samples, 3+) and order [return, volatility, direction].")
+    return y_arr[:, 0], y_arr[:, 1], y_arr[:, 2]
 
 
 def run(config_path: Path) -> None:
@@ -56,33 +64,73 @@ def run(config_path: Path) -> None:
     cv_folds = int(config.get("model_training", {}).get("cv_folds", 3))
     cv_strategy = str(config.get("model_training", {}).get("cv_strategy", "kfold")).strip().lower()
     if cv_strategy == "timeseries":
-        cv = TimeSeriesSplit(n_splits=cv_folds)
+        splitter = TimeSeriesSplit(n_splits=cv_folds)
     else:
-        cv = cv_folds
+        splitter = KFold(n_splits=cv_folds, shuffle=False)
 
-    scores = cross_val_score(
-        est,
-        X,
-        y,
-        cv=cv,
-        scoring="r2",
-        n_jobs=1,
-    )
+    y_return_all, y_volatility_all, y_direction_all = _require_multitask_targets(y)
+
+    return_r2_folds: list[float] = []
+    return_rmse_folds: list[float] = []
+    direction_acc_folds: list[float] = []
+    volatility_rmse_folds: list[float] = []
+    volatility_mae_folds: list[float] = []
+
+    for train_idx, test_idx in splitter.split(X):
+        est.fit(X[train_idx], y[train_idx])
+        pred = est.predict(X[test_idx])
+
+        pred_return = pred[:, 0]
+        pred_volatility = pred[:, 1]
+        pred_direction_prob = pred[:, 2]
+
+        true_return = y_return_all[test_idx]
+        true_direction = y_direction_all[test_idx]
+        true_volatility = y_volatility_all[test_idx]
+
+        return_r2_folds.append(float(r2_score(true_return, pred_return)))
+        return_rmse_folds.append(float(np.sqrt(mean_squared_error(true_return, pred_return))))
+        direction_acc_folds.append(
+            float(accuracy_score(true_direction, (pred_direction_prob >= 0.5).astype(float)))
+        )
+        volatility_rmse_folds.append(float(np.sqrt(mean_squared_error(true_volatility, pred_volatility))))
+        volatility_mae_folds.append(float(mean_absolute_error(true_volatility, pred_volatility)))
 
     result = {
-        "r2_folds": [float(s) for s in scores],
-        "r2_mean": float(scores.mean()),
-        "r2_std": float(scores.std()),
+        "return_r2_folds": return_r2_folds,
+        "return_r2_mean": float(np.mean(return_r2_folds)),
+        "return_r2_std": float(np.std(return_r2_folds)),
+        "return_rmse_folds": return_rmse_folds,
+        "return_rmse_mean": float(np.mean(return_rmse_folds)),
+        "return_rmse_std": float(np.std(return_rmse_folds)),
+        "direction_accuracy_folds": direction_acc_folds,
+        "direction_accuracy_mean": float(np.mean(direction_acc_folds)),
+        "direction_accuracy_std": float(np.std(direction_acc_folds)),
+        "volatility_rmse_folds": volatility_rmse_folds,
+        "volatility_rmse_mean": float(np.mean(volatility_rmse_folds)),
+        "volatility_rmse_std": float(np.std(volatility_rmse_folds)),
+        "volatility_mae_folds": volatility_mae_folds,
+        "volatility_mae_mean": float(np.mean(volatility_mae_folds)),
+        "volatility_mae_std": float(np.std(volatility_mae_folds)),
         "best_params": params,
+        "cv_strategy": cv_strategy,
+        "cv_folds": cv_folds,
     }
 
     out_path = metrics_dir / "price_only_r2_scores.json"
     out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
-    print("Price-only ablation R2")
-    print("r2_folds=" + ",".join(f"{s:.6f}" for s in scores))
-    print("r2_mean=" + str(float(scores.mean())))
-    print("r2_std=" + str(float(scores.std())))
+    print("Price-only multitask metrics")
+    print("return_r2_folds=" + ",".join(f"{s:.6f}" for s in return_r2_folds))
+    print("return_r2_mean=" + str(float(np.mean(return_r2_folds))))
+    print("return_rmse_folds=" + ",".join(f"{s:.6f}" for s in return_rmse_folds))
+    print("return_rmse_mean=" + str(float(np.mean(return_rmse_folds))))
+    print("direction_accuracy_folds=" + ",".join(f"{s:.6f}" for s in direction_acc_folds))
+    print("direction_accuracy_mean=" + str(float(np.mean(direction_acc_folds))))
+    print("volatility_rmse_folds=" + ",".join(f"{s:.6f}" for s in volatility_rmse_folds))
+    print("volatility_rmse_mean=" + str(float(np.mean(volatility_rmse_folds))))
+    print("volatility_mae_folds=" + ",".join(f"{s:.6f}" for s in volatility_mae_folds))
+    print("volatility_mae_mean=" + str(float(np.mean(volatility_mae_folds))))
     print(f"cv_strategy={cv_strategy}, cv_folds={cv_folds}")
     print(f"Saved metrics: {out_path}")
 

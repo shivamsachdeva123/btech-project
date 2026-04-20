@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import yaml
-from sklearn.metrics import mean_absolute_error, mean_squared_error
+from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error
 from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -15,7 +15,24 @@ SRC_PATH = PROJECT_ROOT / "src"
 if str(SRC_PATH) not in sys.path:
     sys.path.insert(0, str(SRC_PATH))
 
+from hybrid_data_prep.build_model_input import convert_log_returns_to_prices
 from price_only_ablation.sklearn_estimator import PriceOnlyLateFusionEstimator
+
+
+def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    y_arr = np.asarray(y, dtype=np.float32)
+    if y_arr.ndim != 2 or y_arr.shape[1] < 3:
+        raise ValueError("Expected y with shape (n_samples, 3+) and order [return, volatility, direction].")
+    return y_arr[:, 0], y_arr[:, 1], y_arr[:, 2]
+
+
+def _neg_return_rmse(estimator: PriceOnlyLateFusionEstimator, X: np.ndarray, y: np.ndarray) -> float:
+    y = np.asarray(y)
+    y_return = y[:, 0] if y.ndim == 2 else y
+    pred = estimator.predict(X)
+    pred_return = pred[:, 0] if pred.ndim == 2 else pred
+    rmse = np.sqrt(mean_squared_error(y_return, pred_return))
+    return -float(rmse)
 
 
 def run(config_path: Path) -> None:
@@ -30,9 +47,11 @@ def run(config_path: Path) -> None:
     payload = np.load(model_input_path)
     X = payload["X"]
     y = payload["y"]
+    previous_close = payload["previous_close"]
     target_close = payload["target_close"]
     window_size = int(payload["window_size"])
     price_feature_dim = int(payload["price_feature_dim"])
+    target_col = str(config.get("model_input", {}).get("target_col", "target_close"))
 
     company_vocab_size = int(np.max(X[:, -1])) + 1
 
@@ -67,11 +86,14 @@ def run(config_path: Path) -> None:
     else:
         cv = cv_folds
 
+    scoring_cfg = str(train_cfg.get("scoring", "neg_root_mean_squared_error"))
+    scoring = _neg_return_rmse if np.asarray(y).ndim == 2 else scoring_cfg
+
     grid = GridSearchCV(
         estimator=estimator,
         param_grid=param_grid,
         cv=cv,
-        scoring=str(train_cfg.get("scoring", "neg_root_mean_squared_error")),
+        scoring=scoring,
         n_jobs=1,
         verbose=2,
         refit=True,
@@ -85,7 +107,24 @@ def run(config_path: Path) -> None:
     best_estimator = grid.best_estimator_
     best_estimator.save_model(best_model_path)
 
-    pred_close = best_estimator.predict(X)
+    pred_target = best_estimator.predict(X)
+    pred_return = pred_target[:, 0] if np.asarray(pred_target).ndim == 2 else pred_target
+    pred_volatility = pred_target[:, 1]
+    pred_direction_prob = pred_target[:, 2]
+
+    if target_col == "target_log_return" or target_col == "target_return":
+        pred_close = convert_log_returns_to_prices(pred_return, previous_close)
+    elif target_col == "target_close":
+        pred_close = pred_return
+    else:
+        raise ValueError(f"Unsupported model_input.target_col for close reconstruction: {target_col}")
+
+    _, true_volatility, true_direction = _require_multitask_targets(y)
+
+    direction_accuracy = float(accuracy_score(true_direction, (pred_direction_prob >= 0.5).astype(float)))
+    volatility_rmse = float(np.sqrt(mean_squared_error(true_volatility, pred_volatility)))
+    volatility_mae = float(mean_absolute_error(true_volatility, pred_volatility))
+
     close_rmse = float(np.sqrt(mean_squared_error(target_close, pred_close)))
     close_mae = float(mean_absolute_error(target_close, pred_close))
 
@@ -97,9 +136,12 @@ def run(config_path: Path) -> None:
                 "window_size": window_size,
                 "price_feature_dim": price_feature_dim,
                 "company_vocab_size": company_vocab_size,
-                "target_col": str(config.get("model_input", {}).get("target_col", "target_close")),
+                "target_col": target_col,
                 "reconstructed_price_rmse": close_rmse,
                 "reconstructed_price_mae": close_mae,
+                "direction_accuracy_fit": direction_accuracy,
+                "volatility_rmse_fit": volatility_rmse,
+                "volatility_mae_fit": volatility_mae,
             },
             f,
             indent=2,
@@ -109,6 +151,9 @@ def run(config_path: Path) -> None:
     print(f"Best params: {grid.best_params_}")
     print(f"Reconstructed close RMSE (fit data): {close_rmse}")
     print(f"Reconstructed close MAE (fit data): {close_mae}")
+    print(f"Direction accuracy (fit data): {direction_accuracy}")
+    print(f"Volatility RMSE (fit data): {volatility_rmse}")
+    print(f"Volatility MAE (fit data): {volatility_mae}")
     print(f"Saved best model: {best_model_path}")
     print(f"Saved best params: {best_params_path}")
     print(f"CV strategy: {cv_strategy}, folds={cv_folds}")

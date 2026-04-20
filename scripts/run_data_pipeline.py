@@ -40,6 +40,20 @@ def _save_dataframe(df: pd.DataFrame, path: Path) -> None:
     df.to_csv(path, index=False)
 
 
+def _truncate_preview_text(df: pd.DataFrame, text_col: str, max_chars: int = 240) -> pd.DataFrame:
+    """Return a copy with long text clipped for readable console previews."""
+    preview = df.copy()
+    if text_col in preview.columns:
+        preview[text_col] = (
+            preview[text_col]
+            .astype(str)
+            .str.replace(r"\s+", " ", regex=True)
+            .str.strip()
+            .str.slice(0, max_chars)
+        )
+    return preview
+
+
 def _load_prepared_research_news(prepared_path: Path, logger) -> pd.DataFrame:
     if not prepared_path.exists():
         return pd.DataFrame(columns=["ticker", "published_date", "news_text"])
@@ -123,13 +137,18 @@ def _filter_prices_to_company_windows(
     return filtered
 
 
-def run_pipeline(config_path: Path) -> None:
+def run_pipeline(config_path: Path, companies_filter: list[str] | None = None, device: str | None = None) -> None:
     with config_path.open("r", encoding="utf-8") as stream:
         config = yaml.safe_load(stream)
 
     logger = build_logger(config["paths"]["log_dir"])
 
     companies = config["companies"]
+    
+    # Override device if specified
+    if device:
+        config["sentiment_model"]["device"] = device
+        logger.info(f"Overriding device to: {device}")
     price_cfg = config["price_data"]
     news_cfg = config["news_data"]
     sentiment_cfg = config.get("sentiment_model", {})
@@ -139,13 +158,28 @@ def run_pipeline(config_path: Path) -> None:
     _print_stage_header("STAGE 0 - CONFIGURATION")
     company_windows_df = load_top_company_windows(news_cfg["top20_windows_csv"], logger=logger)
     companies = company_windows_df["ticker"].tolist()
-    print(f"Companies selected from research windows ({len(companies)}): {companies}")
+    
+    # Apply company filter if specified
+    if companies_filter:
+        companies_filter = [c.upper().strip() for c in companies_filter]
+        company_windows_df = company_windows_df[company_windows_df["ticker"].isin(companies_filter)]
+        companies = company_windows_df["ticker"].tolist()
+        logger.info(f"Filtered to companies: {companies}")
+        print(f"[FILTERED] Companies selected ({len(companies)}): {companies}")
+    else:
+        print(f"Companies selected from research windows ({len(companies)}): {companies}")
+    
     if not company_windows_df.empty:
         print("Research window sample:")
         print(company_windows_df.head(10).to_string(index=False))
 
     print("News provider: research_csv")
     print(f"Price window size for alignment: {align_cfg['window_size']}")
+    target_col = str(config.get("model_input", {}).get("target_col", "target_close"))
+    if target_col in {"target_log_return", "target_return"}:
+        print(f"Effective model sequence length (return-based): {int(align_cfg['window_size']) - 1}")
+    else:
+        print(f"Effective model sequence length (price-based): {int(align_cfg['window_size'])}")
     print(f"Price date range: {price_cfg['start_date']} -> {price_cfg['end_date']}")
 
     _print_stage_header("STAGE 1 - PRICE DATA COLLECTION")
@@ -193,7 +227,8 @@ def run_pipeline(config_path: Path) -> None:
     print("News sample:")
     sample_cols = ["ticker", "published_date", "news_text"]
     if not news_df.empty:
-        print(news_df[sample_cols].head(8).to_string(index=False))
+        news_preview = _truncate_preview_text(news_df[sample_cols].head(8), "news_text")
+        print(news_preview.to_string(index=False))
         print("News rows per ticker:")
         print(news_df.groupby("ticker").size().to_string())
 
@@ -207,7 +242,8 @@ def run_pipeline(config_path: Path) -> None:
     _save_dataframe(consolidated_df, consolidated_out)
     print(f"Saved consolidated news+price rows: {len(consolidated_df)} -> {consolidated_out}")
     if not consolidated_df.empty:
-        print(consolidated_df.head(8).to_string(index=False))
+        consolidated_preview = _truncate_preview_text(consolidated_df.head(8), "news")
+        print(consolidated_preview.to_string(index=False))
 
     _print_stage_header("STAGE 3 - DAILY SENTIMENT AGGREGATION")
     sentiment_out = PROJECT_ROOT / config["paths"]["interim_sentiment"]
@@ -218,9 +254,19 @@ def run_pipeline(config_path: Path) -> None:
         sentiment_df["ticker"] = sentiment_df["ticker"].astype(str).str.upper().str.strip()
         sentiment_df["published_date"] = pd.to_datetime(sentiment_df["published_date"], errors="coerce").dt.date
         for col in ["sent_pos", "sent_neu", "sent_neg"]:
-            sentiment_df[col] = pd.to_numeric(sentiment_df[col], errors="coerce")
+            sentiment_df[col] = pd.to_numeric(sentiment_df.get(col), errors="coerce").fillna(0.0)
+
+        if "news_count" not in sentiment_df.columns:
+            sentiment_df["news_count"] = 0
         sentiment_df["news_count"] = pd.to_numeric(sentiment_df["news_count"], errors="coerce").fillna(0).astype(int)
-        sentiment_df = sentiment_df.dropna(subset=["published_date", "sent_pos", "sent_neu", "sent_neg"])
+
+        if "sentiment_strength" not in sentiment_df.columns:
+            sentiment_df["sentiment_strength"] = (sentiment_df["sent_pos"] - sentiment_df["sent_neg"]).abs()
+        sentiment_df["sentiment_strength"] = pd.to_numeric(
+            sentiment_df["sentiment_strength"], errors="coerce"
+        ).fillna(0.0)
+
+        sentiment_df = sentiment_df.dropna(subset=["published_date"])
         logger.info("Reused existing sentiment file from %s. Rows: %s", sentiment_out, len(sentiment_df))
     else:
         sentiment_df = build_daily_sentiment(
@@ -231,6 +277,11 @@ def run_pipeline(config_path: Path) -> None:
             batch_size=int(sentiment_cfg.get("batch_size", 16)),
             max_length=int(sentiment_cfg.get("max_length", 256)),
             device_preference=str(sentiment_cfg.get("device", "auto")),
+            top_k=int(sentiment_cfg.get("top_k", 5)),
+            article_level_output_path=PROJECT_ROOT / config["paths"].get(
+                "interim_sentiment_article_level",
+                "data/interim/sentiment/news_sentiment_article_level.csv",
+            ),
         )
         _save_dataframe(sentiment_df, sentiment_out)
 
@@ -252,6 +303,7 @@ def run_pipeline(config_path: Path) -> None:
         company_map_df=company_map_df,
         window_size=align_cfg["window_size"],
         target_column=align_cfg["target_column"],
+        sentiment_temporal_decay_lambda=float(align_cfg.get("sentiment_temporal_decay_lambda", 0.1)),
         logger=logger,
     )
 
@@ -286,9 +338,36 @@ def parse_args() -> argparse.Namespace:
         default=Path("src/config/pipeline_config.yaml"),
         help="Path to the pipeline YAML config",
     )
+    parser.add_argument(
+        "--companies",
+        type=str,
+        nargs="+",
+        default=None,
+        help="Filter to specific companies (e.g., --companies AAPL MSFT). If not provided, uses all companies from config.",
+    )
+    parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "gpu", "mps"],
+        default=None,
+        help="Compute device: cpu, gpu (CUDA), or mps (Apple Metal). If not specified, auto-selects best available (MPS > GPU > CPU).",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    run_pipeline(args.config)
+    
+    # Auto-detect best device if not specified
+    device_to_use = args.device
+    if not device_to_use:
+        import torch
+        if torch.backends.mps.is_available():
+            device_to_use = "mps"
+        elif torch.cuda.is_available():
+            device_to_use = "gpu"
+        else:
+            device_to_use = "cpu"
+        print(f"[AUTO-DETECT] Using device: {device_to_use}")
+    
+    run_pipeline(args.config, companies_filter=args.companies, device=device_to_use)

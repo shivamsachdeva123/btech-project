@@ -11,23 +11,23 @@ from sklearn.metrics import mean_squared_error
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
-from price_only_ablation.model import PriceOnlyLateFusionRegressorNet
+from news_only_ablation.model import NewsOnlyLateFusionRegressorNet
 
 
 @dataclass(frozen=True)
 class InputSchema:
     window_size: int
-    price_feature_dim: int
+    sentiment_feature_dim: int
 
 
-class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
+class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
     def __init__(
         self,
         window_size: int,
         company_vocab_size: int,
-        price_feature_dim: int = 1,
-        price_hidden_dim: int = 32,
-        price_num_layers: int = 1,
+        sentiment_feature_dim: int = 5,
+        sentiment_hidden_dim: int = 32,
+        sentiment_num_layers: int = 1,
         lstm_dropout: float = 0.0,
         company_emb_dim: int = 16,
         ann_hidden_dim: int = 64,
@@ -46,9 +46,9 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
     ) -> None:
         self.window_size = window_size
         self.company_vocab_size = company_vocab_size
-        self.price_feature_dim = price_feature_dim
-        self.price_hidden_dim = price_hidden_dim
-        self.price_num_layers = price_num_layers
+        self.sentiment_feature_dim = sentiment_feature_dim
+        self.sentiment_hidden_dim = sentiment_hidden_dim
+        self.sentiment_num_layers = sentiment_num_layers
         self.lstm_dropout = lstm_dropout
         self.company_emb_dim = company_emb_dim
         self.ann_hidden_dim = ann_hidden_dim
@@ -67,11 +67,11 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
 
         self.schema_ = InputSchema(
             window_size=window_size,
-            price_feature_dim=price_feature_dim,
+            sentiment_feature_dim=sentiment_feature_dim,
         )
-        self.model_: PriceOnlyLateFusionRegressorNet | None = None
-        self.price_mean_: np.ndarray | None = None
-        self.price_std_: np.ndarray | None = None
+        self.model_: NewsOnlyLateFusionRegressorNet | None = None
+        self.sent_mean_: np.ndarray | None = None
+        self.sent_std_: np.ndarray | None = None
         self.scaling_checks_: dict[str, float] | None = None
         self.last_loss_components_: dict[str, float] | None = None
 
@@ -91,32 +91,32 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
 
     def _decode_flat_features(self, X: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         n_samples = X.shape[0]
-        p_count = self.window_size * self.price_feature_dim
-        expected_feature_count = p_count + 1
+        s_count = self.window_size * self.sentiment_feature_dim
+        expected_feature_count = s_count + 1
 
         if X.ndim != 2:
             raise ValueError(f"Expected 2D array X, got shape={X.shape}")
         if X.shape[1] != expected_feature_count:
             raise ValueError(
-                "Price-only input feature size mismatch: "
-                f"expected {expected_feature_count} (= {self.window_size}*{self.price_feature_dim} + 1 company_id), "
+                "News-only input feature size mismatch: "
+                f"expected {expected_feature_count} (= {self.window_size}*{self.sentiment_feature_dim} + 1 company_id), "
                 f"got {X.shape[1]}. Rebuild model input NPZ with current window settings."
             )
 
-        price_flat = X[:, :p_count]
-        company_flat = X[:, p_count]
+        sent_flat = X[:, :s_count]
+        company_flat = X[:, s_count]
 
-        price_seq = price_flat.reshape(n_samples, self.window_size, self.price_feature_dim).astype(np.float32)
+        sent_seq = sent_flat.reshape(n_samples, self.window_size, self.sentiment_feature_dim).astype(np.float32)
         company_id = company_flat.astype(np.int64).reshape(-1, 1)
-        return price_seq, company_id
+        return sent_seq, company_id
 
-    def _build_model(self) -> PriceOnlyLateFusionRegressorNet:
+    def _build_model(self) -> NewsOnlyLateFusionRegressorNet:
         torch.manual_seed(self.random_state)
-        model = PriceOnlyLateFusionRegressorNet(
+        model = NewsOnlyLateFusionRegressorNet(
             company_vocab_size=self.company_vocab_size,
-            price_input_dim=self.price_feature_dim,
-            price_hidden_dim=self.price_hidden_dim,
-            price_num_layers=self.price_num_layers,
+            sentiment_input_dim=self.sentiment_feature_dim,
+            sentiment_hidden_dim=self.sentiment_hidden_dim,
+            sentiment_num_layers=self.sentiment_num_layers,
             lstm_dropout=self.lstm_dropout,
             company_emb_dim=self.company_emb_dim,
             ann_hidden_dim=self.ann_hidden_dim,
@@ -124,17 +124,16 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         )
         return model
 
-    def _fit_feature_scalers(self, price_seq: np.ndarray) -> None:
-        # Global scaling over all train samples and timesteps.
-        price_flat = price_seq.reshape(-1, self.price_feature_dim)
-        self.price_mean_ = np.mean(price_flat, axis=0, keepdims=True).astype(np.float32)
-        self.price_std_ = np.std(price_flat, axis=0, keepdims=True).astype(np.float32)
-        self.price_std_ = np.where(self.price_std_ > 1e-8, self.price_std_, 1.0).astype(np.float32)
+    def _fit_feature_scalers(self, sent_seq: np.ndarray) -> None:
+        sent_flat = sent_seq.reshape(-1, self.sentiment_feature_dim)
+        self.sent_mean_ = np.mean(sent_flat, axis=0, keepdims=True).astype(np.float32)
+        self.sent_std_ = np.std(sent_flat, axis=0, keepdims=True).astype(np.float32)
+        self.sent_std_ = np.where(self.sent_std_ > 1e-8, self.sent_std_, 1.0).astype(np.float32)
 
-    def _transform_features(self, price_seq: np.ndarray) -> np.ndarray:
-        if self.price_mean_ is None or self.price_std_ is None:
+    def _transform_features(self, sent_seq: np.ndarray) -> np.ndarray:
+        if self.sent_mean_ is None or self.sent_std_ is None:
             raise RuntimeError("Feature scaler is not fitted. Call fit() before predict().")
-        return ((price_seq - self.price_mean_.reshape(1, 1, -1)) / self.price_std_.reshape(1, 1, -1)).astype(np.float32)
+        return ((sent_seq - self.sent_mean_.reshape(1, 1, -1)) / self.sent_std_.reshape(1, 1, -1)).astype(np.float32)
 
     def _build_optimizer(self) -> torch.optim.Optimizer:
         if self.model_ is None:
@@ -164,37 +163,37 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
             "columns [target_log_return, volatility, direction]."
         )
 
-    def fit(self, X: np.ndarray, y: np.ndarray) -> "PriceOnlyLateFusionEstimator":
+    def fit(self, X: np.ndarray, y: np.ndarray) -> "NewsOnlyLateFusionEstimator":
         X = np.asarray(X)
         y_return, y_direction, y_volatility = self._split_targets(y)
 
-        price_seq_raw, company_id = self._decode_flat_features(X)
-        self._fit_feature_scalers(price_seq_raw)
-        price_seq = self._transform_features(price_seq_raw)
+        sent_seq_raw, company_id = self._decode_flat_features(X)
+        self._fit_feature_scalers(sent_seq_raw)
+        sent_seq = self._transform_features(sent_seq_raw)
 
         if (
-            np.isnan(price_seq).any()
+            np.isnan(sent_seq).any()
             or np.isnan(y_return).any()
             or np.isnan(y_direction).any()
             or np.isnan(y_volatility).any()
         ):
-            raise ValueError("NaNs detected after scaling in price-only estimator fit().")
+            raise ValueError("NaNs detected after scaling in news-only estimator fit().")
 
-        train_price_mean = float(np.mean(price_seq))
-        train_price_std = float(np.std(price_seq))
+        train_sent_mean = float(np.mean(sent_seq))
+        train_sent_std = float(np.std(sent_seq))
         self.scaling_checks_ = {
-            "train_price_mean": train_price_mean,
-            "train_price_std": train_price_std,
+            "train_sent_mean": train_sent_mean,
+            "train_sent_std": train_sent_std,
         }
 
         if self.verbose:
             print(
-                "Price-only scaling checks: "
-                f"price_mean={train_price_mean:.6f}, price_std={train_price_std:.6f}"
+                "News-only scaling checks: "
+                f"sent_mean={train_sent_mean:.6f}, sent_std={train_sent_std:.6f}"
             )
 
         dataset = TensorDataset(
-            torch.from_numpy(price_seq),
+            torch.from_numpy(sent_seq),
             torch.from_numpy(company_id),
             torch.from_numpy(y_return),
             torch.from_numpy(y_direction),
@@ -214,14 +213,15 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         last_direction_loss = 0.0
         last_volatility_loss = 0.0
         for _ in range(self.epochs):
-            for price_b, company_b, y_return_b, y_direction_b, y_volatility_b in loader:
-                price_b = price_b.to(device)
+            for sent_b, company_b, y_return_b, y_direction_b, y_volatility_b in loader:
+                sent_b = sent_b.to(device)
                 company_b = company_b.to(device)
                 y_return_b = y_return_b.to(device)
                 y_direction_b = y_direction_b.to(device)
                 y_volatility_b = y_volatility_b.to(device)
+
                 optimizer.zero_grad()
-                pred = self.model_(price_b, company_b)
+                pred = self.model_(sent_b, company_b)
                 return_pred = pred[:, 0]
                 volatility_pred = torch.relu(pred[:, 1])
                 direction_logit = pred[:, 2]
@@ -250,7 +250,7 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
 
         if self.verbose:
             print(
-                "Price-only final batch losses: "
+                "News-only final batch losses: "
                 f"return={last_return_loss:.6f}, "
                 f"direction={last_direction_loss:.6f}, "
                 f"volatility={last_volatility_loss:.6f}"
@@ -263,14 +263,14 @@ class PriceOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
             raise RuntimeError("Model is not trained. Call fit() first.")
 
         X = np.asarray(X)
-        price_seq_raw, company_id = self._decode_flat_features(X)
-        price_seq = self._transform_features(price_seq_raw)
+        sent_seq_raw, company_id = self._decode_flat_features(X)
+        sent_seq = self._transform_features(sent_seq_raw)
         device = self._resolve_device()
 
         self.model_.eval()
         with torch.inference_mode():
             preds = self.model_(
-                torch.from_numpy(price_seq).to(device),
+                torch.from_numpy(sent_seq).to(device),
                 torch.from_numpy(company_id).to(device),
             )
         preds_np = preds.cpu().numpy().astype(np.float32)
