@@ -45,13 +45,13 @@ alignment:
   window_size: 20
   target_column: "Close"
   sentiment_temporal_decay_lambda: 0.1
-  sentiment_strength_threshold: 0.2  # Hard gate: only use sentiment if strength >= threshold
-  sentiment_scale_factor: 0.2  # Scale down sentiment features to reduce noise
+  sentiment_strength_threshold: 0.25  # Hard gate: only use sentiment if strength >= threshold
+  sentiment_scale_factor: 0.05  # Scale down sentiment features to reduce noise
 
 model_input:
   target_col: "target_log_return"
   normalize_price_per_company: false
-  sentiment_feature_dim: 6  # sent_pos, sent_neu, sent_neg, sentiment_strength, net_sentiment, news_count
+  sentiment_feature_dim: 7  # sent_pos, sent_neu, sent_neg, sentiment_strength, net_sentiment, news_count, has_news
 
 model_training:
   cv_folds: 3

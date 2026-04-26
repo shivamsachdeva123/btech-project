@@ -14,6 +14,7 @@ DEFAULT_SENTIMENT = {
     "sentiment_strength": 0.0,
     "net_sentiment": 0.0,
     "news_count": 0,
+    "has_news": 0,
 }
 
 
@@ -34,8 +35,8 @@ def align_modalities(
     target_column: str,
     logger: logging.Logger,
     sentiment_temporal_decay_lambda: float = 0.1,
-    sentiment_strength_threshold: float = 0.2,
-    sentiment_scale_factor: float = 0.2,
+    sentiment_strength_threshold: float = 0.25,
+    sentiment_scale_factor: float = 0.05,
 ) -> pd.DataFrame:
     if prices_df.empty:
         logger.warning("Prices dataframe is empty. No aligned rows can be built.")
@@ -55,12 +56,20 @@ def align_modalities(
                 "sentiment_strength",
                 "net_sentiment",
                 "news_count",
+                "has_news",
+                "has_news",
             ]
         )
     else:
         sentiment_data = sentiment_df.copy()
 
     sentiment_data = sentiment_data.rename(columns={"published_date": "date"})
+
+    if "has_news" not in sentiment_data.columns:
+        if "news_count" in sentiment_data.columns:
+            sentiment_data["has_news"] = (pd.to_numeric(sentiment_data["news_count"], errors="coerce").fillna(0) > 0).astype(int)
+        else:
+            sentiment_data["has_news"] = 1
 
     merged = price_data.merge(sentiment_data, on=["ticker", "date"], how="left")
     for col, val in DEFAULT_SENTIMENT.items():
@@ -80,9 +89,9 @@ def align_modalities(
             safe_close_window_np = np.maximum(close_window_np, 1e-8)
             return_window = np.log(safe_close_window_np[1:] / safe_close_window_np[:-1]).round(6).tolist()
 
-            # Build sentiment windows with 6 features: sent_pos, sent_neu, sent_neg, sentiment_strength, net_sentiment, news_count.
+            # Build sentiment windows with 7 features: sent_pos, sent_neu, sent_neg, sentiment_strength, net_sentiment, news_count, has_news.
             sentiment_window_np = window_slice[
-                ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength", "net_sentiment", "news_count"]
+                ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength", "net_sentiment", "news_count", "has_news"]
             ].to_numpy(dtype=float)
             # Align sentiment with returns: return_t corresponds to sentiment_t.
             sentiment_window_np = sentiment_window_np[1:]

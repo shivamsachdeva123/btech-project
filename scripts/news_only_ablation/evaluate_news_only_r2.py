@@ -18,11 +18,13 @@ if str(SRC_PATH) not in sys.path:
 from news_only_ablation.sklearn_estimator import NewsOnlyLateFusionEstimator
 
 
-def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _extract_return_target(y: np.ndarray) -> np.ndarray:
     y_arr = np.asarray(y, dtype=np.float32)
-    if y_arr.ndim != 2 or y_arr.shape[1] < 3:
-        raise ValueError("Expected y with shape (n_samples, 3+) and order [return, volatility, direction].")
-    return y_arr[:, 0], y_arr[:, 1], y_arr[:, 2]
+    if y_arr.ndim == 1:
+        return y_arr
+    if y_arr.ndim == 2 and y_arr.shape[1] >= 1:
+        return y_arr[:, 0]
+    raise ValueError("Expected y with return in column 0.")
 
 
 def run(config_path: Path) -> None:
@@ -68,33 +70,33 @@ def run(config_path: Path) -> None:
     else:
         splitter = KFold(n_splits=cv_folds, shuffle=False)
 
-    y_return_all, y_volatility_all, y_direction_all = _require_multitask_targets(y)
+    y_return_all = _extract_return_target(y)
 
     return_r2_folds: list[float] = []
     return_rmse_folds: list[float] = []
+    return_mae_folds: list[float] = []
     direction_acc_folds: list[float] = []
-    volatility_rmse_folds: list[float] = []
-    volatility_mae_folds: list[float] = []
+    confidence_mean_folds: list[float] = []
+    confidence_std_folds: list[float] = []
+    confidence_threshold = float(config.get("model_training", {}).get("confidence_threshold", 0.02))
+    if confidence_threshold <= 0:
+        raise ValueError("model_training.confidence_threshold must be > 0")
 
     for train_idx, test_idx in splitter.split(X):
         est.fit(X[train_idx], y[train_idx])
-        pred = est.predict(X[test_idx])
-
-        pred_return = pred[:, 0]
-        pred_volatility = pred[:, 1]
-        pred_direction_prob = pred[:, 2]
+        pred_return = np.asarray(est.predict(X[test_idx]), dtype=np.float32).reshape(-1)
 
         true_return = y_return_all[test_idx]
-        true_direction = y_direction_all[test_idx]
-        true_volatility = y_volatility_all[test_idx]
+        true_direction = (true_return > 0.0).astype(np.float32)
+        pred_direction = (pred_return > 0.0).astype(np.float32)
+        confidence = np.minimum(1.0, np.abs(pred_return) / confidence_threshold)
 
         return_r2_folds.append(float(r2_score(true_return, pred_return)))
         return_rmse_folds.append(float(np.sqrt(mean_squared_error(true_return, pred_return))))
-        direction_acc_folds.append(
-            float(accuracy_score(true_direction, (pred_direction_prob >= 0.5).astype(float)))
-        )
-        volatility_rmse_folds.append(float(np.sqrt(mean_squared_error(true_volatility, pred_volatility))))
-        volatility_mae_folds.append(float(mean_absolute_error(true_volatility, pred_volatility)))
+        return_mae_folds.append(float(mean_absolute_error(true_return, pred_return)))
+        direction_acc_folds.append(float(accuracy_score(true_direction, pred_direction)))
+        confidence_mean_folds.append(float(np.mean(confidence)))
+        confidence_std_folds.append(float(np.std(confidence)))
 
     result = {
         "return_r2_folds": return_r2_folds,
@@ -103,15 +105,17 @@ def run(config_path: Path) -> None:
         "return_rmse_folds": return_rmse_folds,
         "return_rmse_mean": float(np.mean(return_rmse_folds)),
         "return_rmse_std": float(np.std(return_rmse_folds)),
+        "return_mae_folds": return_mae_folds,
+        "return_mae_mean": float(np.mean(return_mae_folds)),
+        "return_mae_std": float(np.std(return_mae_folds)),
         "direction_accuracy_folds": direction_acc_folds,
         "direction_accuracy_mean": float(np.mean(direction_acc_folds)),
         "direction_accuracy_std": float(np.std(direction_acc_folds)),
-        "volatility_rmse_folds": volatility_rmse_folds,
-        "volatility_rmse_mean": float(np.mean(volatility_rmse_folds)),
-        "volatility_rmse_std": float(np.std(volatility_rmse_folds)),
-        "volatility_mae_folds": volatility_mae_folds,
-        "volatility_mae_mean": float(np.mean(volatility_mae_folds)),
-        "volatility_mae_std": float(np.std(volatility_mae_folds)),
+        "confidence_threshold": confidence_threshold,
+        "confidence_mean_folds": confidence_mean_folds,
+        "confidence_mean": float(np.mean(confidence_mean_folds)),
+        "confidence_std_folds": confidence_std_folds,
+        "confidence_std": float(np.mean(confidence_std_folds)),
         "best_params": params,
         "cv_strategy": cv_strategy,
         "cv_folds": cv_folds,
@@ -127,10 +131,8 @@ def run(config_path: Path) -> None:
     print("return_rmse_mean=" + str(float(np.mean(return_rmse_folds))))
     print("direction_accuracy_folds=" + ",".join(f"{s:.6f}" for s in direction_acc_folds))
     print("direction_accuracy_mean=" + str(float(np.mean(direction_acc_folds))))
-    print("volatility_rmse_folds=" + ",".join(f"{s:.6f}" for s in volatility_rmse_folds))
-    print("volatility_rmse_mean=" + str(float(np.mean(volatility_rmse_folds))))
-    print("volatility_mae_folds=" + ",".join(f"{s:.6f}" for s in volatility_mae_folds))
-    print("volatility_mae_mean=" + str(float(np.mean(volatility_mae_folds))))
+    print("confidence_mean_folds=" + ",".join(f"{s:.6f}" for s in confidence_mean_folds))
+    print("confidence_mean=" + str(float(np.mean(confidence_mean_folds))))
     print(f"cv_strategy={cv_strategy}, cv_folds={cv_folds}")
     print(f"Saved metrics: {out_path}")
 

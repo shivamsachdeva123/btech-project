@@ -9,7 +9,7 @@ class HybridLateFusionRegressorNet(nn.Module):
         self,
         company_vocab_size: int,
         price_input_dim: int = 1,
-        sentiment_input_dim: int = 6,
+        sentiment_input_dim: int = 7,
         price_hidden_dim: int = 32,
         sentiment_hidden_dim: int = 32,
         price_num_layers: int = 1,
@@ -55,8 +55,6 @@ class HybridLateFusionRegressorNet(nn.Module):
         )
         head_dim = ann_hidden_dim // 2
         self.return_head = nn.Linear(head_dim, 1)
-        self.volatility_head = nn.Linear(head_dim, 1)
-        self.direction_head = nn.Linear(head_dim, 1)
 
     def forward(
         self,
@@ -80,12 +78,4 @@ class HybridLateFusionRegressorNet(nn.Module):
 
         fused = torch.cat([price_repr, gated_sent_repr, company_repr], dim=1)
         shared = self.ann_head(fused)
-        # Output order: [return_pred, volatility_raw, direction_logit]
-        return torch.cat(
-            [
-                self.return_head(shared),
-                self.volatility_head(shared),
-                self.direction_head(shared),
-            ],
-            dim=1,
-        )
+        return self.return_head(shared)

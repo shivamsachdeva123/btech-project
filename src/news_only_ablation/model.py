@@ -43,8 +43,6 @@ class NewsOnlyLateFusionRegressorNet(nn.Module):
         )
         head_dim = ann_hidden_dim // 2
         self.return_head = nn.Linear(head_dim, 1)
-        self.direction_head = nn.Linear(head_dim, 1)
-        self.volatility_head = nn.Linear(head_dim, 1)
 
     def forward(self, sentiment_seq: torch.Tensor, company_id: torch.Tensor) -> torch.Tensor:
         # Apply dropout to sentiment inputs to reduce noise from low-quality signals
@@ -56,12 +54,4 @@ class NewsOnlyLateFusionRegressorNet(nn.Module):
 
         fused = torch.cat([sent_repr, company_repr], dim=1)
         shared = self.ann_head(fused)
-        # Output order: [return_pred, volatility_raw, direction_logit]
-        return torch.cat(
-            [
-                self.return_head(shared),
-                self.volatility_head(shared),
-                self.direction_head(shared),
-            ],
-            dim=1,
-        )
+        return self.return_head(shared)

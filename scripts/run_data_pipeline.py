@@ -260,6 +260,10 @@ def run_pipeline(config_path: Path, companies_filter: list[str] | None = None, d
             sentiment_df["news_count"] = 0
         sentiment_df["news_count"] = pd.to_numeric(sentiment_df["news_count"], errors="coerce").fillna(0).astype(int)
 
+        if "has_news" not in sentiment_df.columns:
+            sentiment_df["has_news"] = (sentiment_df["news_count"] > 0).astype(int)
+        sentiment_df["has_news"] = pd.to_numeric(sentiment_df["has_news"], errors="coerce").fillna(0).astype(int)
+
         if "sentiment_strength" not in sentiment_df.columns:
             sentiment_df["sentiment_strength"] = (sentiment_df["sent_pos"] - sentiment_df["sent_neg"]).abs()
         sentiment_df["sentiment_strength"] = pd.to_numeric(

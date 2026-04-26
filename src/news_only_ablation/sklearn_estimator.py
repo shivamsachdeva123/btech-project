@@ -62,9 +62,6 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         self.epochs = epochs
         self.device = device
         self.random_state = random_state
-        self.loss_weight_return = loss_weight_return
-        self.loss_weight_direction = loss_weight_direction
-        self.loss_weight_volatility = loss_weight_volatility
         self.verbose = verbose
 
         self.schema_ = InputSchema(
@@ -153,22 +150,21 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
 
         raise ValueError(f"Unsupported optimizer_name={self.optimizer_name}")
 
-    def _split_targets(self, y: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def _split_targets(self, y: np.ndarray) -> np.ndarray:
         y = np.asarray(y, dtype=np.float32)
-        if y.ndim == 2 and y.shape[1] >= 3:
-            y_return = y[:, 0].astype(np.float32)
-            y_volatility = y[:, 1].astype(np.float32)
-            y_direction = y[:, 2].astype(np.float32)
-            return y_return, y_direction, y_volatility
+        if y.ndim == 2 and y.shape[1] >= 1:
+            return y[:, 0].astype(np.float32)
+        if y.ndim == 1:
+            return y.astype(np.float32)
 
         raise ValueError(
-            "Expected y as shape (n_samples, 3+) with "
-            "columns [target_log_return, volatility, direction]."
+            "Expected y as shape (n_samples,) or (n_samples, >=1) with "
+            "return/target_log_return in column 0."
         )
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> "NewsOnlyLateFusionEstimator":
         X = np.asarray(X)
-        y_return, y_direction, y_volatility = self._split_targets(y)
+        y_return = self._split_targets(y)
 
         sent_seq_raw, company_id = self._decode_flat_features(X)
         self._fit_feature_scalers(sent_seq_raw)
@@ -177,8 +173,6 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         if (
             np.isnan(sent_seq).any()
             or np.isnan(y_return).any()
-            or np.isnan(y_direction).any()
-            or np.isnan(y_volatility).any()
         ):
             raise ValueError("NaNs detected after scaling in news-only estimator fit().")
 
@@ -199,8 +193,6 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
             torch.from_numpy(sent_seq),
             torch.from_numpy(company_id),
             torch.from_numpy(y_return),
-            torch.from_numpy(y_direction),
-            torch.from_numpy(y_volatility),
         )
         loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
@@ -209,54 +201,34 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         self.model_ = self.model_.to(device)
         optimizer = self._build_optimizer()
         mse = nn.MSELoss()
-        bce_logits = nn.BCEWithLogitsLoss()
 
         self.model_.train()
         last_return_loss = 0.0
-        last_direction_loss = 0.0
-        last_volatility_loss = 0.0
         for _ in range(self.epochs):
-            for sent_b, company_b, y_return_b, y_direction_b, y_volatility_b in loader:
+            for sent_b, company_b, y_return_b in loader:
                 sent_b = sent_b.to(device)
                 company_b = company_b.to(device)
                 y_return_b = y_return_b.to(device)
-                y_direction_b = y_direction_b.to(device)
-                y_volatility_b = y_volatility_b.to(device)
 
                 optimizer.zero_grad()
                 pred = self.model_(sent_b, company_b)
                 return_pred = pred[:, 0]
-                volatility_pred = torch.relu(pred[:, 1])
-                direction_logit = pred[:, 2]
 
                 return_loss = mse(return_pred, y_return_b)
-                direction_loss = bce_logits(direction_logit, y_direction_b)
-                volatility_loss = mse(volatility_pred, y_volatility_b)
-
-                loss = (
-                    (self.loss_weight_return * return_loss)
-                    + (self.loss_weight_direction * direction_loss)
-                    + (self.loss_weight_volatility * volatility_loss)
-                )
+                loss = return_loss
                 loss.backward()
                 optimizer.step()
 
                 last_return_loss = float(return_loss.detach().cpu().item())
-                last_direction_loss = float(direction_loss.detach().cpu().item())
-                last_volatility_loss = float(volatility_loss.detach().cpu().item())
 
         self.last_loss_components_ = {
             "return_loss": last_return_loss,
-            "direction_loss": last_direction_loss,
-            "volatility_loss": last_volatility_loss,
         }
 
         if self.verbose:
             print(
                 "News-only final batch losses: "
-                f"return={last_return_loss:.6f}, "
-                f"direction={last_direction_loss:.6f}, "
-                f"volatility={last_volatility_loss:.6f}"
+                f"return={last_return_loss:.6f}"
             )
 
         return self
@@ -276,10 +248,7 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
                 torch.from_numpy(sent_seq).to(device),
                 torch.from_numpy(company_id).to(device),
             )
-        preds_np = preds.cpu().numpy().astype(np.float32)
-        preds_np[:, 1] = np.maximum(preds_np[:, 1], 0.0)
-        preds_np[:, 2] = 1.0 / (1.0 + np.exp(-preds_np[:, 2]))
-        return preds_np
+        return preds.cpu().numpy().astype(np.float32).reshape(-1)
 
     def score(self, X: Any, y: Any, sample_weight: Any = None) -> float:
         y = np.asarray(y, dtype=np.float32)
@@ -288,7 +257,7 @@ class NewsOnlyLateFusionEstimator(BaseEstimator, RegressorMixin):
         else:
             y_return = y
         pred = self.predict(X)
-        pred_return = pred[:, 0] if pred.ndim == 2 else pred
+        pred_return = pred
         rmse = np.sqrt(mean_squared_error(y_return, pred_return, sample_weight=sample_weight))
         return -float(rmse)
 

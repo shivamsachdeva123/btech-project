@@ -181,6 +181,7 @@ def build_daily_sentiment(
                 "sentiment_strength",
                 "net_sentiment",
                 "news_count",
+                "has_news",
             ]
         )
 
@@ -198,6 +199,7 @@ def build_daily_sentiment(
                 "sentiment_strength",
                 "net_sentiment",
                 "news_count",
+                "has_news",
             ]
         )
 
@@ -266,6 +268,7 @@ def build_daily_sentiment(
                 "sent_neu_weighted": float((g["relevance_score"] * g["sent_neu"]).sum()),
                 "sent_neg_weighted": float((g["relevance_score"] * g["sent_neg"]).sum()),
                 "news_count": int(len(g)),
+                "has_news": 1,
             }
         )
     ).reset_index()
@@ -300,6 +303,7 @@ def build_daily_sentiment(
             "sentiment_strength",
             "net_sentiment",
             "news_count",
+            "has_news",
         ]
     ]
 
@@ -315,11 +319,12 @@ def build_daily_sentiment(
         on=["ticker", "published_date"],
     )
 
-    fill_zero_cols = ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength"]
+    fill_zero_cols = ["sent_pos", "sent_neu", "sent_neg", "sentiment_strength", "net_sentiment", "has_news"]
     for col in fill_zero_cols:
         aggregated[col] = pd.to_numeric(aggregated[col], errors="coerce").fillna(0.0)
 
     aggregated["news_count"] = pd.to_numeric(aggregated["news_count"], errors="coerce").fillna(0).astype(int)
+    aggregated["has_news"] = pd.to_numeric(aggregated["has_news"], errors="coerce").fillna(0).astype(int)
 
     aggregated = aggregated.sort_values(["ticker", "published_date"]).reset_index(drop=True)
 
