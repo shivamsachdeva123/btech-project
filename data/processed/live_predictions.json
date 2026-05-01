@@ -1,0 +1,102 @@
+{
+  "AAPL": {
+    "return": -0.004874042235314846,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "AMD": {
+    "return": -0.0008832518942654133,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "AMZN": {
+    "return": 0.0004207962192595005,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "BA": {
+    "return": 0.0028041573241353035,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "BABA": {
+    "return": -0.002087427768856287,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "CVX": {
+    "return": -0.0023791943676769733,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "DIS": {
+    "return": 0.0009176278836093843,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "FSMB": {
+    "return": -0.0012773158960044384,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "GILD": {
+    "return": -0.0011670039966702461,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "GOOG": {
+    "return": -0.0021473004017025232,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "GS": {
+    "return": -0.00011528405593708158,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "INTC": {
+    "return": -0.0002235526917502284,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "MSFT": {
+    "return": -0.0018079155124723911,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "MU": {
+    "return": -0.0016762309242039919,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "NVDA": {
+    "return": -0.001170816831290722,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "PCG": {
+    "return": -0.0131959468126297,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "TSLA": {
+    "return": -3.856007242575288e-05,
+    "direction": 1,
+    "volatility": 0.0
+  },
+  "WFC": {
+    "return": 0.0013211669865995646,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "WMT": {
+    "return": -4.277168773114681e-05,
+    "direction": 0,
+    "volatility": 0.0
+  },
+  "XOM": {
+    "return": -0.0007489976123906672,
+    "direction": 1,
+    "volatility": 0.0
+  }
+}

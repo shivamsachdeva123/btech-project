@@ -1,5 +1,5 @@
 {
-  "best_score": -0.030528375878930092,
+  "best_score": -0.030528375438181283,
   "best_params": {
     "ann_hidden_dim": 128,
     "batch_size": 64,
@@ -15,9 +15,9 @@
   "price_feature_dim": 1,
   "company_vocab_size": 20,
   "target_col": "target_log_return",
-  "reconstructed_price_rmse": 3.2966692447662354,
+  "reconstructed_price_rmse": 3.2966693253565893,
   "reconstructed_price_mae": 1.9241050481796265,
   "direction_accuracy_fit": 0.528815022663501,
-  "volatility_rmse_fit": 0.023572320118546486,
+  "volatility_rmse_fit": 0.02357232040340751,
   "volatility_mae_fit": 0.011582005769014359
 }

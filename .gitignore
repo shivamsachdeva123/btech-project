@@ -15,7 +15,7 @@ logs/
 # Large datasets and generated artifacts
 datasets/data
 
-
+.env 
 # Optional local experiment helpers
 diagnostic_ablation.py
 quick_ridge_test.py
