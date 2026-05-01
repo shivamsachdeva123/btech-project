@@ -1,0 +1,43 @@
+{
+  "return_r2_folds": [
+    0.8745616959637526,
+    0.9322794582225569,
+    0.9711328108700883
+  ],
+  "return_r2_mean": 0.9259913216854659,
+  "return_r2_std": 0.039674933769278886,
+  "return_rmse_folds": [
+    17.51992416381836,
+    35.96502685546875,
+    12.584757804870605
+  ],
+  "return_rmse_mean": 22.02323627471924,
+  "return_rmse_std": 10.062110785705926,
+  "return_mae_folds": [
+    15.517505645751953,
+    26.960535049438477,
+    11.129630088806152
+  ],
+  "return_mae_mean": 17.869223594665527,
+  "return_mae_std": 6.673445934027137,
+  "direction_accuracy_folds": [
+    0.5086355785837651,
+    0.48877374784110533,
+    0.5155440414507773
+  ],
+  "direction_accuracy_mean": 0.5043177892918825,
+  "direction_accuracy_std": 0.011347382466567106,
+  "best_params": {
+    "ann_hidden_dim": 128,
+    "batch_size": 64,
+    "company_emb_dim": 8,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "lstm_dropout": 0.0,
+    "optimizer_name": "adam",
+    "price_hidden_dim": 64,
+    "price_num_layers": 1
+  },
+  "cv_strategy": "timeseries",
+  "cv_folds": 3
+}

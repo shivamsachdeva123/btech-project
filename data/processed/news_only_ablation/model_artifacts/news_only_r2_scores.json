@@ -1,0 +1,44 @@
+{
+  "return_r2_folds": [
+    -0.6785038787640949,
+    0.02338810420466053,
+    -1.148147709967951
+  ],
+  "return_r2_mean": -0.6010878281757951,
+  "return_r2_std": 0.4814000239847581,
+  "return_rmse_folds": [
+    64.08824157714844,
+    136.57814025878906,
+    108.56121063232422
+  ],
+  "return_rmse_mean": 103.07586415608723,
+  "return_rmse_std": 29.846977760926986,
+  "return_mae_folds": [
+    50.61629867553711,
+    123.91004180908203,
+    77.63224792480469
+  ],
+  "return_mae_mean": 84.05286280314128,
+  "return_mae_std": 30.264516265680438,
+  "direction_accuracy_folds": [
+    0.5181347150259067,
+    0.5120898100172712,
+    0.4792746113989637
+  ],
+  "direction_accuracy_mean": 0.5031663788140471,
+  "direction_accuracy_std": 0.017073324843220397,
+  "best_params": {
+    "ann_hidden_dim": 128,
+    "batch_size": 64,
+    "company_emb_dim": 8,
+    "dropout": 0.1,
+    "learning_rate": 0.001,
+    "lstm_dropout": 0.0,
+    "optimizer_name": "adam",
+    "sentiment_dropout": 0.3,
+    "sentiment_hidden_dim": 16,
+    "sentiment_num_layers": 1
+  },
+  "cv_strategy": "timeseries",
+  "cv_folds": 3
+}

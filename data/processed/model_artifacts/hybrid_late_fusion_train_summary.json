@@ -1,0 +1,28 @@
+{
+  "source_best_params": {
+    "ann_hidden_dim": 128,
+    "batch_size": 64,
+    "company_emb_dim": 8,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "lstm_dropout": 0.0,
+    "optimizer_name": "adam",
+    "price_hidden_dim": 32,
+    "price_num_layers": 2,
+    "sentiment_dropout": 0.5,
+    "sentiment_hidden_dim": 64,
+    "sentiment_num_layers": 1
+  },
+  "window_size": 19,
+  "price_feature_dim": 1,
+  "sentiment_feature_dim": 6,
+  "company_vocab_size": 20,
+  "target_col": "target_log_return",
+  "reconstructed_price_rmse": 3.30111026763916,
+  "reconstructed_price_mae": 1.9378262758255005,
+  "direction_accuracy_fit": 0.5432764947118498,
+  "model_output_heads": [
+    "return",
+    "direction"
+  ]
+}

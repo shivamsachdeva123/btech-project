@@ -1,0 +1,56 @@
+{
+  "return_r2_folds": [
+    -0.012680922012223483,
+    -0.006079802727263939,
+    -0.007736686226138101
+  ],
+  "return_r2_mean": -0.008832470321875174,
+  "return_r2_std": 0.002804074540369061,
+  "return_rmse_folds": [
+    0.027431201189756393,
+    0.03604114055633545,
+    0.027930157259106636
+  ],
+  "return_rmse_mean": 0.030467499668399494,
+  "return_rmse_std": 0.003946419799475553,
+  "direction_accuracy_folds": [
+    0.5184466019417475,
+    0.5213730569948186,
+    0.5129533678756477
+  ],
+  "direction_accuracy_mean": 0.5175910089374046,
+  "direction_accuracy_std": 0.0034901595720617713,
+  "high_conf_thresholds": [
+    0.01,
+    0.015,
+    0.02
+  ],
+  "high_conf_direction_accuracy": 0.75,
+  "high_conf_sample_percentage": 0.001725997842502697,
+  "high_conf_direction_accuracy_by_threshold": {
+    "0.010": 0.5542901031380295,
+    "0.015": 0.75,
+    "0.020": 0.5
+  },
+  "high_conf_sample_pct_by_threshold": {
+    "0.010": 0.027193409013420083,
+    "0.015": 0.001725997842502697,
+    "0.020": 0.0004314994606256742
+  },
+  "best_params": {
+    "ann_hidden_dim": 128,
+    "batch_size": 64,
+    "company_emb_dim": 8,
+    "dropout": 0.2,
+    "learning_rate": 0.001,
+    "lstm_dropout": 0.0,
+    "optimizer_name": "adam",
+    "price_hidden_dim": 32,
+    "price_num_layers": 2,
+    "sentiment_dropout": 0.5,
+    "sentiment_hidden_dim": 64,
+    "sentiment_num_layers": 1
+  },
+  "cv_strategy": "kfold",
+  "cv_folds": 3
+}

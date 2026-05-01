@@ -14,9 +14,7 @@ logs/
 
 # Large datasets and generated artifacts
 datasets/
-data/raw/
-data/interim/
-data/processed/
+
 
 # Optional local experiment helpers
 diagnostic_ablation.py
