@@ -37,7 +37,7 @@ sentiment_model:
   model_name: "ProsusAI/finbert"
   batch_size: 128
   max_length: 256
-  device: "mps"
+  device: "cpu"
   reuse_existing_if_present: true
   top_k: 5
 

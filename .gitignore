@@ -13,7 +13,7 @@ logs/
 *.log
 
 # Large datasets and generated artifacts
-datasets/
+datasets/data
 
 
 # Optional local experiment helpers

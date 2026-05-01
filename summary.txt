@@ -1,0 +1,352 @@
+BTECH PROJECT DETAILED SUMMARY (END-TO-END)
+===========================================
+
+This document explains the full project flow in sequence: dataset curation, preprocessing, feature engineering, windowing/alignment, training, cross-validation, evaluation, live inference, and Streamlit UI.
+All key steps are referenced to concrete code locations.
+
+------------------------------------------------------------------------------
+1) Problem framing and architecture
+------------------------------------------------------------------------------
+- Goal: predict stock behavior using both market prices and news sentiment.
+- Primary model: hybrid late-fusion model with:
+  - price LSTM branch
+  - sentiment LSTM branch
+  - company embedding
+  - shared ANN layers
+  - 3 outputs: return, volatility, direction
+- Core implementation:
+  - Hybrid model: `src/hybrid_model/late_fusion_model.py:L7-L91`
+  - Hybrid estimator wrapper: `src/hybrid_model/sklearn_estimator.py:L24-L335`
+
+------------------------------------------------------------------------------
+2) Dataset curation from large news corpus (Kaggle pipeline scripts)
+------------------------------------------------------------------------------
+2.1 Frequency-based shortlist
+- Script: `datasets/scripts/intial_shortlist.py`
+- Reads big CSV in chunks and counts `Stock_symbol`.
+- Keeps companies with >5000 rows.
+- Code:
+  - chunk processing: `datasets/scripts/intial_shortlist.py:L15-L26`
+  - threshold filter: `datasets/scripts/intial_shortlist.py:L30-L35`
+
+2.2 Real-company filtering
+- Script: `datasets/scripts/second_shortlist.py`
+- Uses curated `REAL_COMPANIES` list, filters chunk-wise, parses dates, removes invalid dates.
+- Saves `real_companies_news.csv`.
+- Code:
+  - company list: `datasets/scripts/second_shortlist.py:L12-L20`
+  - filter loop: `datasets/scripts/second_shortlist.py:L27-L43`
+  - output save: `datasets/scripts/second_shortlist.py:L52-L54`
+
+2.3 Best 1-year window per company + top-20 selection
+- Script: `datasets/scripts/final_shortlist.py`
+- For each company, uses sliding 365-day window and picks the highest-news window.
+- Sorts by news count and keeps top 20.
+- Saves `top20_companies_best_1yr_window.csv`.
+- Code:
+  - sliding logic: `datasets/scripts/final_shortlist.py:L25-L35`
+  - top 20 save: `datasets/scripts/final_shortlist.py:L46-L50`
+
+Why this is important:
+- News coverage is inconsistent across companies and years.
+- Window selection creates a more balanced and comparable training base.
+
+------------------------------------------------------------------------------
+3) Offline data pipeline (raw -> aligned training dataset)
+------------------------------------------------------------------------------
+Entry script: `scripts/run_data_pipeline.py:L140-L382`
+
+3.1 Configuration + logging
+- Loads YAML and initializes pipeline logger.
+- Code:
+  - config read: `scripts/run_data_pipeline.py:L141-L155`
+  - logger creation: `scripts/run_data_pipeline.py:L144`
+  - logger internals: `src/data_pipeline/utils/logger.py:L8-L32`
+
+3.2 Top-20 windows loading
+- Uses window CSV as ticker/date source-of-truth.
+- Code:
+  - call site: `scripts/run_data_pipeline.py:L159-L170`
+  - loader: `src/data_pipeline/collectors/research_news_collector.py:L17-L45`
+
+3.3 Stage 1 - Price ingestion (Yahoo Finance)
+- Pulls price rows with buffer around each ticker window.
+- Then strictly filters to each ticker’s allowed date window.
+- Saved file: `data/raw/prices/prices_daily.csv` (config key: `paths.raw_prices`).
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L185-L196`
+  - buffered fetch helper: `scripts/run_data_pipeline.py:L75-L109`
+  - strict filtering helper: `scripts/run_data_pipeline.py:L111-L137`
+  - yfinance collector: `src/data_pipeline/collectors/price_collector.py:L13-L66`
+
+3.4 Stage 2 - News ingestion from research CSV
+- Reads huge CSV in chunks, filters by selected tickers and ticker-specific date ranges.
+- Builds `news_text` from title+summary.
+- Deduplicates by `(ticker, published_date, news_text)`.
+- Saved files:
+  - `data/raw/news/research_top20_filtered_news.csv` (config key: `paths.raw_news`)
+  - also cached prepared file `data/raw/news/research_top20_filtered_news.csv` via `news_data.prepared_filtered_news_csv`.
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L207-L234`
+  - collector core: `src/data_pipeline/collectors/research_news_collector.py:L48-L134`
+
+3.5 Stage 2B - Daily news+price consolidated table
+- Creates daily merged table for diagnostics:
+  - all price days retained
+  - same-day news_count and concatenated text attached
+- Saved file: `data/processed/aligned/news_price_daily_aligned.csv` (config key: `paths.news_price_aligned_output`).
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L235-L246`
+  - processor: `src/data_pipeline/processors/news_price_alignment.py:L8-L55`
+
+3.6 Stage 3 - FinBERT sentiment processing
+- Uses `build_daily_sentiment(...)`:
+  1) assign weekend/holiday news to previous trading day
+  2) run FinBERT article inference
+  3) compute relevance score `abs(pos-neg)`
+  4) keep top-k relevant articles per ticker-day
+  5) weighted aggregation to daily sentiment
+  6) ensure every trading day exists (no-news days filled as zero signal)
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L248-L296`
+  - trading-day bucketing: `src/data_pipeline/processors/sentiment_aggregator.py:L36-L97`
+  - finbert inference: `src/data_pipeline/processors/sentiment_aggregator.py:L100-L158`
+  - top-k weighted aggregation: `src/data_pipeline/processors/sentiment_aggregator.py:L224-L305`
+  - full-day completion: `src/data_pipeline/processors/sentiment_aggregator.py:L306-L325`
+  - optional reuse-existing sentiment CSV: `scripts/run_data_pipeline.py:L250-L277`
+- Saved files:
+  - daily sentiment: `data/interim/sentiment/news_sentiment_daily.csv` (config key: `paths.interim_sentiment`)
+  - article-level sentiment dump: `data/interim/sentiment/news_sentiment_article_level.csv` (config key: `paths.interim_sentiment_article_level`).
+
+3.7 Stage 4 - Company ID mapping
+- Builds ticker -> integer ID map for embedding.
+- Saved file: `data/processed/aligned/company_id_map.csv` (config key: `paths.company_map`).
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L298-L303`
+  - mapper: `src/data_pipeline/processors/alignment.py:L20-L26`
+
+3.8 Stage 5 - Modal alignment + windowing
+- Central modeling dataset creation via `align_modalities(...)`.
+- Steps:
+  - create rolling window slices
+  - compute log-return window from close prices
+  - build sentiment window (6 features)
+  - hard gate low sentiment-strength rows
+  - apply temporal decay by recency
+  - apply sentiment scaling factor
+  - compute targets: return, direction, volatility
+- Code:
+  - stage call: `scripts/run_data_pipeline.py:L305-L322`
+  - return window: `src/data_pipeline/processors/alignment.py:L79-L82`
+  - sentiment window features: `src/data_pipeline/processors/alignment.py:L83-L89`
+  - hard gate: `src/data_pipeline/processors/alignment.py:L90-L94`
+  - temporal decay: `src/data_pipeline/processors/alignment.py:L95-L101`
+  - scaling: `src/data_pipeline/processors/alignment.py:L102-L104`
+  - target construction: `src/data_pipeline/processors/alignment.py:L107-L137`
+  - post-filter by company windows: `src/data_pipeline/processors/alignment.py:L145-L174`
+- Saved file: `data/processed/aligned/hybrid_training_dataset.csv` (config key: `paths.aligned_output`).
+
+------------------------------------------------------------------------------
+4) Model-ready feature creation (aligned CSV -> NPZ arrays)
+------------------------------------------------------------------------------
+4.1 Hybrid input builder
+- Script: `scripts/prepare_hybrid_model_input.py:L17-L41`
+- Core logic:
+  - parse list columns
+  - validate consistent window sizes/dims
+  - assemble targets `[return, volatility, direction]`
+  - flatten into `X=[price_flat, sentiment_flat, company_id]`
+- Code: `src/hybrid_data_prep/build_model_input.py:L36-L107`
+- Saved file: `data/processed/model_input/hybrid_late_fusion_input.npz` (config key: `paths.model_input_npz`).
+
+4.2 Ablation input builders
+- Price-only:
+  - script: `scripts/price_only_ablation/prepare_price_only_input.py:L20-L44`
+  - builder: `src/price_only_ablation/build_model_input.py:L35-L81`
+  - saved file: `data/processed/price_only_ablation/model_input/price_only_input.npz`
+- News-only:
+  - script: `scripts/news_only_ablation/prepare_news_only_input.py:L20-L40`
+  - builder: `src/news_only_ablation/build_model_input.py:L35-L85`
+  - saved file: `data/processed/news_only_ablation/model_input/news_only_input.npz`
+
+------------------------------------------------------------------------------
+5) Hybrid training and evaluation
+------------------------------------------------------------------------------
+5.1 Hybrid training script
+- Script: `scripts/train_hybrid_late_fusion.py`
+- Uses `GridSearchCV` over hyperparameter grid and custom scoring.
+- Selection metric: negative RMSE on return head (`_neg_return_rmse`).
+- Saves best model `.pt` and best params JSON.
+- Saved files:
+  - `data/processed/model_artifacts/hybrid_late_fusion_best.pt`
+  - `data/processed/model_artifacts/hybrid_late_fusion_best_params.json`.
+- Code:
+  - custom scoring: `scripts/train_hybrid_late_fusion.py:L29-L35`
+  - grid setup/fit: `scripts/train_hybrid_late_fusion.py:L95-L105`
+  - artifact saves: `scripts/train_hybrid_late_fusion.py:L107-L152`
+
+5.2 Hybrid evaluation script
+- Script: `scripts/evaluate_hybrid_r2.py`
+- Rebuilds estimator from best params and runs fold-wise evaluation.
+- Metrics:
+  - return R2/RMSE
+  - direction accuracy
+  - volatility RMSE/MAE
+  - high-confidence directional accuracy based on `abs(pred_return)`
+- Code:
+  - fold loop: `scripts/evaluate_hybrid_r2.py:L90-L120`
+  - confidence thresholds: `scripts/evaluate_hybrid_r2.py:L110-L130`
+  - JSON result save: `scripts/evaluate_hybrid_r2.py:L132-L160`
+- Saved metrics file: `data/processed/model_artifacts/hybrid_r2_scores.json`.
+
+------------------------------------------------------------------------------
+6) Cross-validation methodology (critical note for report)
+------------------------------------------------------------------------------
+Important conceptual point:
+- For financial time series, TimeSeries CV is methodologically preferred over shuffled KFold to preserve temporal ordering and reduce leakage risk.
+
+Current repository state:
+- Hybrid scripts currently run KFold (time-series code commented):
+  - train: `scripts/train_hybrid_late_fusion.py:L84-L90`
+  - eval: `scripts/evaluate_hybrid_r2.py:L72-L78`
+- Price-only/news-only scripts currently run TimeSeriesSplit:
+  - price-only train/eval: `scripts/price_only_ablation/train_price_only_late_fusion.py:L82-L85`,
+    `scripts/price_only_ablation/evaluate_price_only_r2.py:L70-L73`
+  - news-only train/eval: `scripts/news_only_ablation/train_news_only_late_fusion.py:L82-L85`,
+    `scripts/news_only_ablation/evaluate_news_only_r2.py:L70-L73`
+- Config files declare `cv_strategy: "timeseries"`:
+  - `src/config/pipeline_config.yaml:L56-L59`
+  - `src/config/price_only_ablation_config.yaml:L11-L14`
+  - `src/config/news_only_ablation_config.yaml:L10-L13`
+
+For your BTech narrative:
+- State TimeSeries CV as intended/final methodology.
+- Mention KFold use (where present) as temporary testing configuration.
+
+------------------------------------------------------------------------------
+7) Ablation experiments (importance and design)
+------------------------------------------------------------------------------
+7.1 Price-only ablation
+- Removes sentiment modality but retains company embedding and multitask outputs.
+- Model: `src/price_only_ablation/model.py:L7-L68`
+- Estimator/losses: `src/price_only_ablation/sklearn_estimator.py:L167-L279`
+- Main saved files:
+  - model: `data/processed/price_only_ablation/model_artifacts/price_only_late_fusion_best.pt`
+  - params: `data/processed/price_only_ablation/model_artifacts/price_only_late_fusion_best_params.json`
+  - metrics: `data/processed/price_only_ablation/metrics/price_only_r2_scores.json`.
+
+7.2 News-only ablation
+- Removes price modality but retains company embedding and multitask outputs.
+- Model: `src/news_only_ablation/model.py:L7-L68`
+- Estimator/losses: `src/news_only_ablation/sklearn_estimator.py:L169-L282`
+- Main saved files:
+  - model: `data/processed/news_only_ablation/model_artifacts/news_only_late_fusion_best.pt`
+  - params: `data/processed/news_only_ablation/model_artifacts/news_only_late_fusion_best_params.json`
+  - metrics: `data/processed/news_only_ablation/metrics/news_only_r2_scores.json`.
+
+Why ablations are useful:
+- Quantify individual modality contribution.
+- Check whether hybrid model truly adds value over unimodal baselines.
+
+------------------------------------------------------------------------------
+8) Live inference pipeline (new independent flow)
+------------------------------------------------------------------------------
+Main file: `src/live_pipeline.py`
+
+8.1 Live price fetch
+- Uses Yahoo Finance via existing `collect_price_data`.
+- Pulls last ~30 calendar days, keeps `window_size+1` trading rows per ticker.
+- Saves `data/processed/live_prices.csv`.
+- Code:
+  - fetch + trim: `src/live_pipeline.py:L205-L223`
+
+8.2 Live news fetch (Finnhub)
+- Per ticker, queries Finnhub company news from first to last fetched trading day.
+- Converts API payload into pipeline schema: `ticker, published_date, news_text`.
+- Code:
+  - Finnhub call: `src/live_pipeline.py:L47-L67`
+  - schema conversion: `src/live_pipeline.py:L70-L95`
+  - per-ticker fetch loop: `src/live_pipeline.py:L225-L245`
+
+8.3 Reuse existing preprocessing exactly
+- Calls existing functions directly (no rewritten logic):
+  - `build_daily_news_price_alignment(...)`
+  - `build_daily_sentiment(...)`
+  - `align_modalities(...)`
+  - `build_flattened_hybrid_input(...)`
+- Code:
+  - processors invoked: `src/live_pipeline.py:L247-L289`
+
+8.4 Latest-window selection and inference
+- Keeps most recent aligned row per ticker.
+- Rebuilds hybrid estimator architecture from best params.
+- Loads trained state dict (`hybrid_late_fusion_best.pt`), applies same estimator scaling setup from training NPZ.
+- Predicts return/direction/volatility and writes JSON.
+- Code:
+  - latest window rows: `src/live_pipeline.py:L280-L282`
+  - model reconstruction + load: `src/live_pipeline.py:L112-L169`
+  - prediction mapping/output save: `src/live_pipeline.py:L298-L320`
+
+Output files:
+- `data/processed/live_prices.csv`
+- `data/processed/live_predictions.json`
+- (also article sentiment dump) `data/processed/live_sentiment_article_level.csv`
+
+------------------------------------------------------------------------------
+9) Streamlit UI and 24-hour auto-run behavior
+------------------------------------------------------------------------------
+File: `app.py`
+
+9.1 Auto-run scheduling with `last_run.txt`
+- On app start:
+  - if `last_run.txt` missing -> run pipeline
+  - else run only if elapsed > 24h
+- Timestamp updates only when pipeline actually runs.
+- Code:
+  - read/write timestamp: `app.py:L25-L39`
+  - run condition: `app.py:L41-L46`
+  - auto-run path: `app.py:L127-L131`
+- Saved timestamp file: `last_run.txt` (project root).
+
+9.2 Manual override
+- "Force Refresh" button immediately reruns pipeline and updates timestamp.
+- Code: `app.py:L158-L166`
+
+9.3 UI layout
+- Header with title + ticker multiselect.
+- Navigation pages:
+  - Price Data: per-ticker close chart
+  - Predictions: cards with arrow, return %, volatility
+- Code:
+  - header/filter: `app.py:L139-L148`
+  - page switch: `app.py:L167-L171`
+  - price render: `app.py:L75-L91`
+  - predictions cards: `app.py:L93-L120`
+
+------------------------------------------------------------------------------
+10) Artifacts and reproducibility notes
+------------------------------------------------------------------------------
+Key config:
+- `src/config/pipeline_config.yaml`
+  - tickers list: `L1-L21`
+  - price settings: `L23-L27`
+  - news source paths: `L29-L35`
+  - sentiment model settings: `L36-L43`
+  - alignment knobs (window/decay/gate/scale): `L44-L49`
+  - training grid settings: `L56-L74`
+  - artifact paths: `L76-L87`
+
+Git ignore behavior:
+- `datasets/` and logs ignored by default.
+- Code: `.gitignore:L11-L17`
+
+Operational dependencies:
+- FinBERT model availability (`transformers`, model download/cache)
+- Yahoo and Finnhub API/network availability
+- Finnhub API key (`FINNHUB_API_KEY`) for live pipeline
+
+------------------------------------------------------------------------------
+11) Complete flow summary in one line
+------------------------------------------------------------------------------
+Large raw news dataset -> curated companies -> per-company best 1-year windows -> chunked news+price ingestion -> FinBERT article sentiment -> top-k weighted daily sentiment -> temporal alignment/window engineering with decay/gating/scaling -> flattened model input -> hybrid/ablation training with CV -> fold-wise evaluation -> independent live pipeline with yfinance+finnhub -> Streamlit dashboard with 24-hour auto-refresh + manual override.
+
