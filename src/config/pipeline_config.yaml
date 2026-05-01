@@ -38,15 +38,15 @@ sentiment_model:
   batch_size: 128
   max_length: 256
   device: "mps"
-  reuse_existing_if_present: false
+  reuse_existing_if_present: true
   top_k: 5
 
 alignment:
   window_size: 20
   target_column: "Close"
-  sentiment_temporal_decay_lambda: 0.1
+  sentiment_temporal_decay_lambda: 0.2
   sentiment_strength_threshold: 0.2  # Hard gate: only use sentiment if strength >= threshold
-  sentiment_scale_factor: 0.2  # Scale down sentiment features to reduce noise
+  sentiment_scale_factor: 1.0  # Scale sentiment features to adjust signal strength
 
 model_input:
   target_col: "target_log_return"
@@ -61,9 +61,9 @@ model_training:
   device: "auto"
   param_grid:
     price_hidden_dim: [32, 64]
-    sentiment_hidden_dim: [16, 32]
+    sentiment_hidden_dim: [64]
     price_num_layers: [1, 2]
-    sentiment_num_layers: [1]
+    sentiment_num_layers: [1, 2]
     lstm_dropout: [0.0]
     sentiment_dropout: [0.3, 0.5]  # Dropout on sentiment inputs to reduce noise
     company_emb_dim: [8]

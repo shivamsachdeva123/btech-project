@@ -11,7 +11,7 @@ class HybridLateFusionRegressorNet(nn.Module):
         price_input_dim: int = 1,
         sentiment_input_dim: int = 6,
         price_hidden_dim: int = 32,
-        sentiment_hidden_dim: int = 32,
+        sentiment_hidden_dim: int = 64,
         price_num_layers: int = 1,
         sentiment_num_layers: int = 1,
         lstm_dropout: float = 0.0,

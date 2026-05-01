@@ -80,11 +80,8 @@ def run(config_path: Path) -> None:
     )
 
     cv_folds = int(train_cfg.get("cv_folds", 3))
-    cv_strategy = str(train_cfg.get("cv_strategy", "kfold")).strip().lower()
-    if cv_strategy == "timeseries":
-        cv = TimeSeriesSplit(n_splits=cv_folds)
-    else:
-        cv = cv_folds
+    cv_strategy = "timeseries"
+    cv = TimeSeriesSplit(n_splits=cv_folds)
 
     scoring_cfg = str(train_cfg.get("scoring", "neg_root_mean_squared_error"))
     scoring = _neg_return_rmse if np.asarray(y).ndim == 2 else scoring_cfg

@@ -25,6 +25,12 @@ def _require_multitask_targets(y: np.ndarray) -> tuple[np.ndarray, np.ndarray, n
     return y_arr[:, 0], y_arr[:, 1], y_arr[:, 2]
 
 
+def _init_threshold_buckets(thresholds: list[float]) -> tuple[dict[float, list[float]], dict[float, list[float]]]:
+    acc = {thr: [] for thr in thresholds}
+    pct = {thr: [] for thr in thresholds}
+    return acc, pct
+
+
 def run(config_path: Path) -> None:
     with config_path.open("r", encoding="utf-8") as stream:
         config = yaml.safe_load(stream)
@@ -64,11 +70,12 @@ def run(config_path: Path) -> None:
     )
 
     cv_folds = int(config.get("model_training", {}).get("cv_folds", 3))
-    cv_strategy = str(config.get("model_training", {}).get("cv_strategy", "kfold")).strip().lower()
-    if cv_strategy == "timeseries":
-        splitter = TimeSeriesSplit(n_splits=cv_folds)
-    else:
-        splitter = KFold(n_splits=cv_folds, shuffle=False)
+    cv_strategy = "kfold"
+    # if cv_strategy == "timeseries":
+    #     splitter = TimeSeriesSplit(n_splits=cv_folds)
+    # else:
+    #     splitter = KFold(n_splits=cv_folds, shuffle=False)
+    splitter = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
 
     y_return_all, y_volatility_all, y_direction_all = _require_multitask_targets(y)
 
@@ -77,6 +84,8 @@ def run(config_path: Path) -> None:
     direction_acc_folds: list[float] = []
     volatility_rmse_folds: list[float] = []
     volatility_mae_folds: list[float] = []
+    confidence_thresholds = [0.01, 0.015, 0.02]
+    high_conf_acc, high_conf_pct = _init_threshold_buckets(confidence_thresholds)
 
     for train_idx, test_idx in splitter.split(X):
         est.fit(X[train_idx], y[train_idx])
@@ -98,6 +107,28 @@ def run(config_path: Path) -> None:
         volatility_rmse_folds.append(float(np.sqrt(mean_squared_error(true_volatility, pred_volatility))))
         volatility_mae_folds.append(float(mean_absolute_error(true_volatility, pred_volatility)))
 
+        confidence = np.abs(pred_return)
+        for thr in confidence_thresholds:
+            mask = confidence > thr
+            if np.any(mask):
+                acc = accuracy_score(true_direction[mask], (pred_direction_prob[mask] >= 0.5).astype(float))
+                pct = float(np.mean(mask))
+            else:
+                acc = float("nan")
+                pct = 0.0
+            high_conf_acc[thr].append(float(acc))
+            high_conf_pct[thr].append(pct)
+
+    high_conf_accuracy_by_threshold = {
+        f"{thr:.3f}": float(np.nanmean(high_conf_acc[thr])) for thr in confidence_thresholds
+    }
+    high_conf_pct_by_threshold = {
+        f"{thr:.3f}": float(np.mean(high_conf_pct[thr])) for thr in confidence_thresholds
+    }
+    default_threshold = 0.015
+    high_conf_direction_accuracy = high_conf_accuracy_by_threshold[f"{default_threshold:.3f}"]
+    high_conf_sample_percentage = high_conf_pct_by_threshold[f"{default_threshold:.3f}"]
+
     result = {
         "return_r2_folds": return_r2_folds,
         "return_r2_mean": float(np.mean(return_r2_folds)),
@@ -114,6 +145,11 @@ def run(config_path: Path) -> None:
         "volatility_mae_folds": volatility_mae_folds,
         "volatility_mae_mean": float(np.mean(volatility_mae_folds)),
         "volatility_mae_std": float(np.std(volatility_mae_folds)),
+        "high_conf_thresholds": confidence_thresholds,
+        "high_conf_direction_accuracy": high_conf_direction_accuracy,
+        "high_conf_sample_percentage": high_conf_sample_percentage,
+        "high_conf_direction_accuracy_by_threshold": high_conf_accuracy_by_threshold,
+        "high_conf_sample_pct_by_threshold": high_conf_pct_by_threshold,
         "best_params": params,
         "cv_strategy": cv_strategy,
         "cv_folds": cv_folds,

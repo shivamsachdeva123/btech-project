@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 from sklearn.metrics import accuracy_score, mean_absolute_error, mean_squared_error
-from sklearn.model_selection import GridSearchCV, TimeSeriesSplit
+from sklearn.model_selection import GridSearchCV, KFold, TimeSeriesSplit
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SRC_PATH = PROJECT_ROOT / "src"
@@ -69,9 +69,9 @@ def run(config_path: Path) -> None:
 
     param_grid = train_cfg.get("param_grid", {
         "price_hidden_dim": [32, 64],
-        "sentiment_hidden_dim": [16, 32],
+        "sentiment_hidden_dim": [64],
         "price_num_layers": [1, 2],
-        "sentiment_num_layers": [1],
+        "sentiment_num_layers": [1, 2],
         "lstm_dropout": [0.0],
         "company_emb_dim": [8],
         "ann_hidden_dim": [64, 128],
@@ -82,11 +82,12 @@ def run(config_path: Path) -> None:
     })
 
     cv_folds = int(train_cfg.get("cv_folds", 3))
-    cv_strategy = str(train_cfg.get("cv_strategy", "kfold")).strip().lower()
-    if cv_strategy == "timeseries":
-        cv = TimeSeriesSplit(n_splits=cv_folds)
-    else:
-        cv = cv_folds
+    cv_strategy = "kfold"
+    # if cv_strategy == "timeseries":
+    #     cv = TimeSeriesSplit(n_splits=cv_folds)
+    # else:
+    #     cv = cv_folds
+    cv = KFold(n_splits=cv_folds, shuffle=True, random_state=42)
 
     scoring_cfg = str(train_cfg.get("scoring", "neg_root_mean_squared_error"))
     scoring = _neg_return_rmse if np.asarray(y).ndim == 2 else scoring_cfg

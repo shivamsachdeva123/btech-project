@@ -36,6 +36,9 @@ def run(config_path: Path) -> None:
         company_map_df=company_map,
         window_size=int(config["alignment"]["window_size"]),
         target_column=str(config["alignment"]["target_column"]),
+        sentiment_temporal_decay_lambda=float(config["alignment"].get("sentiment_temporal_decay_lambda", 0.1)),
+        sentiment_strength_threshold=float(config["alignment"].get("sentiment_strength_threshold", 0.2)),
+        sentiment_scale_factor=float(config["alignment"].get("sentiment_scale_factor", 0.2)),
         logger=logger,
     )
     aligned = filter_aligned_by_company_windows(
