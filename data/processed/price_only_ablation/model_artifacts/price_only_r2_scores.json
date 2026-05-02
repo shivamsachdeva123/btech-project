@@ -1,32 +1,56 @@
 {
   "return_r2_folds": [
-    0.8745616959637526,
-    0.9322794582225569,
-    0.9711328108700883
+    -0.058202266693115234,
+    -0.027979254722595215,
+    -0.0215378999710083
   ],
-  "return_r2_mean": 0.9259913216854659,
-  "return_r2_std": 0.039674933769278886,
+  "return_r2_mean": -0.035906473795572914,
+  "return_r2_std": 0.01598331522675071,
   "return_rmse_folds": [
-    17.51992416381836,
-    35.96502685546875,
-    12.584757804870605
+    0.021880814219202356,
+    0.023262877181216477,
+    0.046427244753913945
   ],
-  "return_rmse_mean": 22.02323627471924,
-  "return_rmse_std": 10.062110785705926,
-  "return_mae_folds": [
-    15.517505645751953,
-    26.960535049438477,
-    11.129630088806152
-  ],
-  "return_mae_mean": 17.869223594665527,
-  "return_mae_std": 6.673445934027137,
+  "return_rmse_mean": 0.030523645384777597,
+  "return_rmse_std": 0.011259688544485839,
   "direction_accuracy_folds": [
-    0.5086355785837651,
-    0.48877374784110533,
-    0.5155440414507773
+    0.5051813471502591,
+    0.5034542314335061,
+    0.49827288428324695
   ],
-  "direction_accuracy_mean": 0.5043177892918825,
-  "direction_accuracy_std": 0.011347382466567106,
+  "direction_accuracy_mean": 0.5023028209556707,
+  "direction_accuracy_std": 0.0029355322473188406,
+  "volatility_rmse_folds": [
+    0.021271525687726715,
+    0.019388919278414067,
+    0.040666802728066574
+  ],
+  "volatility_rmse_mean": 0.027109082564735782,
+  "volatility_rmse_std": 0.009617514708193794,
+  "volatility_mae_folds": [
+    0.012640892527997494,
+    0.013798646628856659,
+    0.016241399571299553
+  ],
+  "volatility_mae_mean": 0.014226979576051235,
+  "volatility_mae_std": 0.0015007808139889999,
+  "high_conf_thresholds": [
+    0.01,
+    0.015,
+    0.02
+  ],
+  "high_conf_direction_accuracy": 0.6666666666666666,
+  "high_conf_sample_percentage": 0.0017271157167530226,
+  "high_conf_direction_accuracy_by_threshold": {
+    "0.010": 0.5555555555555556,
+    "0.015": 0.6666666666666666,
+    "0.020": NaN
+  },
+  "high_conf_sample_pct_by_threshold": {
+    "0.010": 0.015544041450777202,
+    "0.015": 0.0017271157167530226,
+    "0.020": 0.0
+  },
   "best_params": {
     "ann_hidden_dim": 128,
     "batch_size": 64,
@@ -35,8 +59,8 @@
     "learning_rate": 0.001,
     "lstm_dropout": 0.0,
     "optimizer_name": "adam",
-    "price_hidden_dim": 64,
-    "price_num_layers": 1
+    "price_hidden_dim": 32,
+    "price_num_layers": 2
   },
   "cv_strategy": "timeseries",
   "cv_folds": 3
