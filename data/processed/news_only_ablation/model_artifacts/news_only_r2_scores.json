@@ -1,42 +1,66 @@
 {
   "return_r2_folds": [
-    -0.6785038787640949,
-    0.02338810420466053,
-    -1.148147709967951
+    -0.11513098226237406,
+    -0.043552097324259575,
+    -0.004887106008306885
   ],
-  "return_r2_mean": -0.6010878281757951,
-  "return_r2_std": 0.4814000239847581,
+  "return_r2_mean": -0.05452339519831351,
+  "return_r2_std": 0.045670596636212486,
   "return_rmse_folds": [
-    64.08824157714844,
-    136.57814025878906,
-    108.56121063232422
+    0.022461673244833946,
+    0.02343842014670372,
+    0.046047311276197433
   ],
-  "return_rmse_mean": 103.07586415608723,
-  "return_rmse_std": 29.846977760926986,
-  "return_mae_folds": [
-    50.61629867553711,
-    123.91004180908203,
-    77.63224792480469
-  ],
-  "return_mae_mean": 84.05286280314128,
-  "return_mae_std": 30.264516265680438,
+  "return_rmse_mean": 0.030649134889245033,
+  "return_rmse_std": 0.010895454271097095,
   "direction_accuracy_folds": [
-    0.5181347150259067,
-    0.5120898100172712,
-    0.4792746113989637
+    0.5051813471502591,
+    0.5302245250431779,
+    0.5051813471502591
   ],
-  "direction_accuracy_mean": 0.5031663788140471,
-  "direction_accuracy_std": 0.017073324843220397,
+  "direction_accuracy_mean": 0.5135290731145653,
+  "direction_accuracy_std": 0.01180546727369593,
+  "volatility_rmse_folds": [
+    0.02063857764005661,
+    0.02188774384558201,
+    0.04081165790557861
+  ],
+  "volatility_rmse_mean": 0.02777932646373908,
+  "volatility_rmse_std": 0.009229349964821509,
+  "volatility_mae_folds": [
+    0.0123280119150877,
+    0.018265755847096443,
+    0.01689905859529972
+  ],
+  "volatility_mae_mean": 0.01583094211916129,
+  "volatility_mae_std": 0.002539009696118476,
+  "high_conf_thresholds": [
+    0.01,
+    0.015,
+    0.02
+  ],
+  "high_conf_direction_accuracy": 0.6666666666666666,
+  "high_conf_sample_percentage": 0.0017271157167530226,
+  "high_conf_direction_accuracy_by_threshold": {
+    "0.010": 0.5132117554447652,
+    "0.015": 0.6666666666666666,
+    "0.020": NaN
+  },
+  "high_conf_sample_pct_by_threshold": {
+    "0.010": 0.1125503742084053,
+    "0.015": 0.0017271157167530226,
+    "0.020": 0.0
+  },
   "best_params": {
-    "ann_hidden_dim": 128,
+    "ann_hidden_dim": 64,
     "batch_size": 64,
     "company_emb_dim": 8,
-    "dropout": 0.1,
+    "dropout": 0.2,
     "learning_rate": 0.001,
     "lstm_dropout": 0.0,
     "optimizer_name": "adam",
-    "sentiment_dropout": 0.3,
-    "sentiment_hidden_dim": 16,
+    "sentiment_dropout": 0.5,
+    "sentiment_hidden_dim": 32,
     "sentiment_num_layers": 1
   },
   "cv_strategy": "timeseries",
