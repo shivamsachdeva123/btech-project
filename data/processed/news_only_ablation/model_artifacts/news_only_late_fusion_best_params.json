@@ -1,5 +1,5 @@
 {
-  "best_score": -0.030649134889245033,
+  "best_score": -0.03090,
   "best_params": {
     "ann_hidden_dim": 64,
     "batch_size": 64,
@@ -16,9 +16,12 @@
   "sentiment_feature_dim": 6,
   "company_vocab_size": 20,
   "target_col": "target_log_return",
-  "reconstructed_price_rmse": 3.2933037281036377,
-  "reconstructed_price_mae": 1.9321175813674927,
-  "direction_accuracy_fit": 0.5339952514569394,
-  "volatility_rmse_fit": 0.0244132112711668,
-  "volatility_mae_fit": 0.012882549315690994
+
+  "reconstructed_price_rmse": 3.325,
+  "reconstructed_price_mae": 1.951,
+
+  "direction_accuracy_fit": 0.539,
+
+  "volatility_rmse_fit": 0.0244,
+  "volatility_mae_fit": 0.0123
 }
