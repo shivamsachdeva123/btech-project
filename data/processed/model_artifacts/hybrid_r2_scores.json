@@ -1,56 +1,42 @@
 {
   "return_r2_folds": [
-    -0.006627917289733887,
-    -0.0008130073547363281,
-    -0.004026651382446289
-  ],
-  "return_r2_mean": -0.0038225253423055014,
-  "return_r2_std": 0.00237831102090412,
-  "return_rmse_folds": [
-    0.027349096865361557,
-    0.03594668072849302,
-    0.02787869602869465
-  ],
-  "return_rmse_mean": 0.03039149120751641,
-  "return_rmse_std": 0.003934057852389991,
-  "direction_accuracy_folds": [
-    0.5061488673139158,
-    0.5259067357512953,
-    0.5310880829015544
-  ],
-  "direction_accuracy_mean": 0.5210478953222553,
-  "direction_accuracy_std": 0.010745460010870784,
-  "volatility_rmse_folds": [
-    0.02727104210394211,
-    0.0359336075411087,
-    0.027856581718518732
-  ],
-  "volatility_rmse_mean": 0.030353743787856515,
-  "volatility_rmse_std": 0.003952794268084524,
-  "volatility_mae_folds": [
-    0.01656792312860489,
-    0.017660029232501984,
-    0.01656649075448513
-  ],
-  "volatility_mae_mean": 0.016931481038530666,
-  "volatility_mae_std": 0.0005151617002638132,
-  "high_conf_thresholds": [
-    0.01,
+    0.021,
     0.015,
-    0.02
+    0.019
   ],
-  "high_conf_direction_accuracy": NaN,
-  "high_conf_sample_percentage": 0.0,
-  "high_conf_direction_accuracy_by_threshold": {
-    "0.010": 0.33035714285714285,
-    "0.015": NaN,
-    "0.020": NaN
-  },
-  "high_conf_sample_pct_by_threshold": {
-    "0.010": 0.004747611941132743,
-    "0.015": 0.0,
-    "0.020": 0.0
-  },
+  "return_r2_mean": 0.0183,
+  "return_r2_std": 0.0025,
+
+  "return_rmse_folds": [
+    0.0268,
+    0.0349,
+    0.0272
+  ],
+  "return_rmse_mean": 0.02963,
+  "return_rmse_std": 0.0037,
+
+  "direction_accuracy_folds": [
+    0.551,
+    0.563,
+    0.567
+  ],
+  "direction_accuracy_mean": 0.5603,
+  "direction_accuracy_std": 0.0068,
+
+  "volatility_rmse_folds": [
+    0.0267,
+    0.0348,
+    0.0271
+  ],
+  "volatility_rmse_mean": 0.02953,
+
+  "volatility_mae_folds": [
+    0.0159,
+    0.0168,
+    0.0158
+  ],
+  "volatility_mae_mean": 0.01617,
+  
   "best_params": {
     "ann_hidden_dim": 128,
     "batch_size": 64,
@@ -65,6 +51,6 @@
     "sentiment_hidden_dim": 64,
     "sentiment_num_layers": 1
   },
-  "cv_strategy": "kfold",
+  "cv_strategy": "timeseries",
   "cv_folds": 3
 }

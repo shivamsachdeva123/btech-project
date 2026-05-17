@@ -63,7 +63,7 @@ Entry script: `scripts/run_data_pipeline.py:L140-L382`
   - logger creation: `scripts/run_data_pipeline.py:L144`
   - logger internals: `src/data_pipeline/utils/logger.py:L8-L32`
 
-3.2 Top-20 windows loading
+3.2 Top-20 windows loading 
 - Uses window CSV as ticker/date source-of-truth.
 - Code:
   - call site: `scripts/run_data_pipeline.py:L159-L170`
