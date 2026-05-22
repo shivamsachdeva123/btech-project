@@ -244,7 +244,8 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
         device = self._resolve_device()
         self.model_ = self.model_.to(device)
         optimizer = self._build_optimizer()
-        rmse = nn.MSELoss()
+        mse = nn.MSELoss()
+        rmse= torch.sqrt(mse())
         bce_logits = nn.BCEWithLogitsLoss()
 
         self.model_.train()
