@@ -1,102 +1,102 @@
 {
   "AAPL": {
-    "return": -0.004874042235314846,
+    "return": -0.0032018860802054405,
     "direction": 1,
     "volatility": 0.0
   },
   "AMD": {
-    "return": -0.0008832518942654133,
+    "return": -0.0012115372810512781,
     "direction": 1,
     "volatility": 0.0
   },
   "AMZN": {
-    "return": 0.0004207962192595005,
+    "return": -0.0007082722149789333,
     "direction": 1,
     "volatility": 0.0
   },
   "BA": {
-    "return": 0.0028041573241353035,
+    "return": 0.001634357264265418,
     "direction": 0,
     "volatility": 0.0
   },
   "BABA": {
-    "return": -0.002087427768856287,
+    "return": -0.0016648946329951286,
     "direction": 1,
     "volatility": 0.0
   },
   "CVX": {
-    "return": -0.0023791943676769733,
-    "direction": 1,
+    "return": -0.0028680243995040655,
+    "direction": 0,
     "volatility": 0.0
   },
   "DIS": {
-    "return": 0.0009176278836093843,
+    "return": 0.0017426712438464165,
     "direction": 1,
     "volatility": 0.0
   },
   "FSMB": {
-    "return": -0.0012773158960044384,
+    "return": 8.785916725173593e-05,
     "direction": 0,
     "volatility": 0.0
   },
   "GILD": {
-    "return": -0.0011670039966702461,
+    "return": -0.0006245268159545958,
     "direction": 0,
     "volatility": 0.0
   },
   "GOOG": {
-    "return": -0.0021473004017025232,
+    "return": -0.0035729201044887304,
     "direction": 1,
     "volatility": 0.0
   },
   "GS": {
-    "return": -0.00011528405593708158,
+    "return": 0.0005271023255772889,
     "direction": 1,
     "volatility": 0.0
   },
   "INTC": {
-    "return": -0.0002235526917502284,
+    "return": -0.0023822400253266096,
     "direction": 0,
     "volatility": 0.0
   },
   "MSFT": {
-    "return": -0.0018079155124723911,
+    "return": -0.002274885540828109,
     "direction": 1,
     "volatility": 0.0
   },
   "MU": {
-    "return": -0.0016762309242039919,
+    "return": -0.002735709073022008,
     "direction": 1,
     "volatility": 0.0
   },
   "NVDA": {
-    "return": -0.001170816831290722,
+    "return": -0.0015516465064138174,
     "direction": 1,
     "volatility": 0.0
   },
   "PCG": {
-    "return": -0.0131959468126297,
+    "return": -0.01255174819380045,
     "direction": 1,
     "volatility": 0.0
   },
   "TSLA": {
-    "return": -3.856007242575288e-05,
+    "return": -0.00032348616514354944,
     "direction": 1,
     "volatility": 0.0
   },
   "WFC": {
-    "return": 0.0013211669865995646,
+    "return": -0.0009871600195765495,
     "direction": 0,
     "volatility": 0.0
   },
   "WMT": {
-    "return": -4.277168773114681e-05,
+    "return": -0.00034749374026432633,
     "direction": 0,
     "volatility": 0.0
   },
   "XOM": {
-    "return": -0.0007489976123906672,
-    "direction": 1,
+    "return": -0.0014919501263648272,
+    "direction": 0,
     "volatility": 0.0
   }
 }

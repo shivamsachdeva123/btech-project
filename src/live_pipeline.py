@@ -183,7 +183,7 @@ def run_live_pipeline(
 
     company_map_df = _load_company_map(config=config, logger=logger)
     available_tickers = set(company_map_df["ticker"].tolist())
-
+  
     if tickers:
         requested_tickers = [t.upper().strip() for t in tickers]
         selected_tickers = [t for t in requested_tickers if t in available_tickers]
@@ -195,13 +195,13 @@ def run_live_pipeline(
 
     end_date = _today_utc_date() + timedelta(days=1)
     start_date = _today_utc_date() - timedelta(days=30)
-
+    
     price_cfg = config["price_data"]
     window_size = int(config["alignment"]["window_size"])
     # align_modalities builds rows for idx in range(window_size, len(grp)),
     # so each ticker needs at least window_size + 1 trading rows.
     min_rows_for_alignment = window_size + 1
-
+    
     prices_df = collect_price_data(
         tickers=selected_tickers,
         start_date=start_date.isoformat(),
@@ -221,7 +221,7 @@ def run_live_pipeline(
     live_prices_path = PROJECT_ROOT / "data/processed/live_prices.csv"
     live_prices_path.parent.mkdir(parents=True, exist_ok=True)
     prices_df.to_csv(live_prices_path, index=False)
-
+   
     news_parts: list[pd.DataFrame] = []
     for ticker, grp in prices_df.groupby("Ticker"):
         trading_dates = sorted(pd.to_datetime(grp["Date"], errors="coerce").dt.date.dropna().unique().tolist())
@@ -237,7 +237,7 @@ def run_live_pipeline(
             logger=logger,
         )
         news_parts.append(_news_to_pipeline_schema(str(ticker), raw_news))
-
+  
     if news_parts:
         news_df = pd.concat(news_parts, ignore_index=True)
         news_df = news_df.drop_duplicates(subset=["ticker", "published_date", "news_text"]).reset_index(drop=True)
@@ -261,7 +261,7 @@ def run_live_pipeline(
 
     live_company_map_df = company_map_df[company_map_df["ticker"].isin(selected_tickers)].copy()
     live_company_map_df = live_company_map_df.sort_values("ticker").reset_index(drop=True)
-
+   
     align_cfg = config["alignment"]
     aligned_df = align_modalities(
         prices_df=prices_df,
@@ -280,7 +280,7 @@ def run_live_pipeline(
     latest_rows = (
         aligned_df.sort_values(["ticker", "target_date"]).groupby("ticker", as_index=False).tail(1).reset_index(drop=True)
     )
-
+   
     model_input_cfg = config.get("model_input", {})
     arrays = build_flattened_hybrid_input(
         aligned_df=latest_rows,
