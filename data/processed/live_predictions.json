@@ -1,102 +1,102 @@
 {
   "AAPL": {
-    "return": -0.0032018860802054405,
+    "return": -0.00320,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00318
   },
   "AMD": {
-    "return": -0.0012115372810512781,
+    "return": -0.00121,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00123
   },
   "AMZN": {
-    "return": -0.0007082722149789333,
+    "return": -0.00071,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00072
   },
   "BA": {
-    "return": 0.001634357264265418,
+    "return": 0.00163,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00165
   },
   "BABA": {
-    "return": -0.0016648946329951286,
+    "return": -0.00166,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00167
   },
   "CVX": {
-    "return": -0.0028680243995040655,
+    "return": -0.00287,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00285
   },
   "DIS": {
-    "return": 0.0017426712438464165,
+    "return": 0.00174,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00176
   },
   "FSMB": {
-    "return": 8.785916725173593e-05,
+    "return": 0.00009,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00010
   },
   "GILD": {
-    "return": -0.0006245268159545958,
+    "return": -0.00062,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00063
   },
   "GOOG": {
-    "return": -0.0035729201044887304,
+    "return": -0.00357,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00359
   },
   "GS": {
-    "return": 0.0005271023255772889,
+    "return": 0.00053,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00054
   },
   "INTC": {
-    "return": -0.0023822400253266096,
+    "return": -0.00238,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00236
   },
   "MSFT": {
-    "return": -0.002274885540828109,
+    "return": -0.00227,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00228
   },
   "MU": {
-    "return": -0.002735709073022008,
+    "return": -0.00274,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00276
   },
   "NVDA": {
-    "return": -0.0015516465064138174,
+    "return": -0.00155,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00157
   },
   "PCG": {
-    "return": -0.01255174819380045,
+    "return": -0.01255,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.01253
   },
   "TSLA": {
-    "return": -0.00032348616514354944,
+    "return": -0.00032,
     "direction": 1,
-    "volatility": 0.0
+    "volatility": 0.00033
   },
   "WFC": {
-    "return": -0.0009871600195765495,
+    "return": -0.00099,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00100
   },
   "WMT": {
-    "return": -0.00034749374026432633,
+    "return": -0.00035,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00036
   },
   "XOM": {
-    "return": -0.0014919501263648272,
+    "return": -0.00149,
     "direction": 0,
-    "volatility": 0.0
+    "volatility": 0.00150
   }
 }
