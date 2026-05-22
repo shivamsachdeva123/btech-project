@@ -245,7 +245,6 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
         self.model_ = self.model_.to(device)
         optimizer = self._build_optimizer()
         mse = nn.MSELoss()
-        rmse= torch.sqrt(mse())
         bce_logits = nn.BCEWithLogitsLoss()
 
         self.model_.train()
@@ -267,9 +266,9 @@ class HybridLateFusionEstimator(BaseEstimator, RegressorMixin):
                 volatility_pred = torch.relu(pred[:, 1])
                 direction_logit = pred[:, 2]
 
-                return_loss = rmse(return_pred, y_return_b)
+                return_loss = mse(return_pred, y_return_b)
                 direction_loss = bce_logits(direction_logit, y_direction_b)
-                volatility_loss = rmse(volatility_pred, y_volatility_b)
+                volatility_loss = mse(volatility_pred, y_volatility_b)
                 loss = return_loss + direction_loss + volatility_loss
                 loss.backward()
                 optimizer.step()
